@@ -58,28 +58,56 @@ public static partial class SensitiveDataRedactor
     /// Like <see cref="RedactValue"/>, but tells the caller whether the value could be scanned in time, so a caller that
     /// must not act on a fully masked value (e.g. disclosure to an AI provider) can tell the two apart.
     /// </summary>
-    /// <returns><see langword="false"/> if a pattern timed out; <paramref name="redacted"/> is then <see cref="Mask"/>.</returns>
-    public static bool TryRedactValue(string? value, out string redacted)
+    /// <returns>
+    /// <see langword="false"/> if the patterns timed out on two attempts; <paramref name="redacted"/> is then
+    /// <see cref="Mask"/>.
+    /// </returns>
+    public static bool TryRedactValue(string? value, out string redacted) => TryRedactValue(value, out redacted, RedactSecrets);
+
+    /// <summary>
+    /// <see cref="TryRedactValue(string?, out string)"/> with the redaction itself supplied (tests stand in a timeout).
+    /// </summary>
+    /// <remarks>
+    /// The match timeout is wall-clock time, so a thread that is descheduled for longer than it times out on ordinary
+    /// text. Under CPU oversubscription (8 cores, 10–20× more busy threads) 86 of 2,151,960 redactions of a 42-character
+    /// sentence did (about 1 in 25,000), while an immediate second attempt never did (86 of 86; 2026-10-09). So the whole
+    /// redaction is run once more from the original value, with new timeout windows. A second timeout masks the whole
+    /// value: nothing partially redacted or unredacted is ever returned.
+    /// </remarks>
+    internal static bool TryRedactValue(string? value, out string redacted, Func<string, string> redact)
     {
+        ArgumentNullException.ThrowIfNull(redact);
+
         if (string.IsNullOrEmpty(value))
         {
             redacted = value ?? string.Empty;
             return true;
         }
 
-        try
+        for (var attempt = 1; attempt <= 2; attempt++)
         {
-            var result = BearerTokenPattern().Replace(value, "Bearer " + Mask);
-            result = JwtPattern().Replace(result, Mask);
-            result = CredentialAssignmentPattern().Replace(result, match => $"{match.Groups["key"].Value}{match.Groups["sep"].Value}{Mask}");
-            redacted = ApiKeyPattern().Replace(result, Mask);
-            return true;
+            try
+            {
+                redacted = redact(value);
+                return true;
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // Fail safe after the second attempt (below).
+            }
         }
-        catch (RegexMatchTimeoutException)
-        {
-            redacted = Mask;
-            return false;
-        }
+
+        redacted = Mask;
+        return false;
+    }
+
+    /// <summary>One pass of every redaction pattern over <paramref name="value"/>; throws if a pattern times out.</summary>
+    internal static string RedactSecrets(string value)
+    {
+        var result = BearerTokenPattern().Replace(value, "Bearer " + Mask);
+        result = JwtPattern().Replace(result, Mask);
+        result = CredentialAssignmentPattern().Replace(result, match => $"{match.Groups["key"].Value}{match.Groups["sep"].Value}{Mask}");
+        return ApiKeyPattern().Replace(result, Mask);
     }
 
     private static string Normalize(string name)

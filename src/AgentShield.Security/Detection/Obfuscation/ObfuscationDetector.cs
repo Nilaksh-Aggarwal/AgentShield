@@ -133,8 +133,8 @@ internal sealed partial class ObfuscationDetector : IThreatDetector, ISingletonS
         var counts = new int[_rules.Length];
         for (var i = 0; i < _rules.Length; i++)
         {
-            // A RegexMatchTimeoutException is not caught: the analysis fails closed, as in PatternThreatDetector.
-            counts[i] = _rules[i].Pattern.Count(text);
+            // Retried once on a timeout; a second timeout is not caught: the analysis fails closed, as in PatternThreatDetector.
+            counts[i] = _rules[i].CountMatches(text);
         }
 
         return counts;

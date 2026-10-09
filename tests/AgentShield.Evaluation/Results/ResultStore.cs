@@ -6,14 +6,16 @@ namespace AgentShield.Evaluation.Results;
 
 /// <summary>
 /// The results directory: <c>baseline.jsonl</c> (deterministic results, one per fixture), <c>attempts.jsonl</c> and
-/// <c>sessions.jsonl</c> (append-only, one line per record, written as it happens so a stopped run can resume), and the
-/// generated <c>report.md</c>.
+/// <c>sessions.jsonl</c> (append-only, one line per record, written as it happens so a stopped run can resume),
+/// <c>sends.jsonl</c> (append-only, written before each fixture that may reach the provider is sent), and the generated
+/// <c>report.md</c>.
 /// </summary>
 internal sealed class ResultStore
 {
     public const string BaselineFile = "baseline.jsonl";
     public const string AttemptsFile = "attempts.jsonl";
     public const string SessionsFile = "sessions.jsonl";
+    public const string SendsFile = "sends.jsonl";
     public const string ReportFile = "report.md";
 
     private static readonly UTF8Encoding NoBom = new(encoderShouldEmitUTF8Identifier: false);
@@ -32,6 +34,18 @@ internal sealed class ResultStore
 
     public IReadOnlyList<SessionRecord> LoadSessions() => Read<SessionRecord>(SessionsFile);
 
+    public IReadOnlyList<SendRecord> LoadSends() => Read<SendRecord>(SendsFile);
+
+    /// <summary>
+    /// The fixtures a send record names but no attempt record does: the process ended while their call was in flight, so
+    /// each may have reached the provider.
+    /// </summary>
+    public IReadOnlySet<string> SentWithoutResult()
+    {
+        var attempted = LoadAttempts().Select(attempt => attempt.FixtureId).ToHashSet(StringComparer.Ordinal);
+        return LoadSends().Select(send => send.FixtureId).Where(id => !attempted.Contains(id)).ToHashSet(StringComparer.Ordinal);
+    }
+
     /// <summary>Replaces the baseline (callers only do this before any attempt exists, or with identical content).</summary>
     public void SaveBaseline(IEnumerable<BaselineRecord> records)
     {
@@ -44,6 +58,8 @@ internal sealed class ResultStore
     public void Append(AttemptRecord attempt) => AppendLine(AttemptsFile, EvaluationJson.Serialize(attempt));
 
     public void Append(SessionRecord session) => AppendLine(SessionsFile, EvaluationJson.Serialize(session));
+
+    public void Append(SendRecord send) => AppendLine(SendsFile, EvaluationJson.Serialize(send));
 
     public void WriteReport(string markdown) => File.WriteAllText(Path.Combine(Directory, ReportFile), markdown, NoBom);
 

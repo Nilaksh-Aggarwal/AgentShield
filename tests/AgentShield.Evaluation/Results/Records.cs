@@ -87,6 +87,13 @@ internal sealed record AttemptRecord(
 
 internal sealed record ProbeResult(string Name, int HttpStatus, bool Echoed);
 
+/// <summary>
+/// Written immediately before a fixture that may reach the provider is sent (write-ahead). A send record without an
+/// attempt record means the process ended while the call was in flight: the request may have reached the provider, so
+/// the fixture counts as attempted and is never planned as never-attempted again.
+/// </summary>
+internal sealed record SendRecord(string SessionId, string FixtureId, string SentUtc);
+
 /// <summary>Where a forbidden value was found (label and counts only, never the value).</summary>
 internal sealed record LeakResult(string Label, IReadOnlyDictionary<string, int> Hits);
 

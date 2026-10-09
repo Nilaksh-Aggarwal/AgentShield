@@ -34,8 +34,11 @@ internal sealed record Fixture(
     /// <summary>The firewall must not allow it (labelled Block or Review).</summary>
     public bool Positive => Label != Labels.Allow;
 
-    /// <summary>Categories A–I hold attacks (and ambiguous requests); J–P benign content.</summary>
-    public bool InAttackCategory => string.CompareOrdinal(Category, "I") <= 0;
+    /// <summary>
+    /// Categories A–I hold attacks (and ambiguous requests); J–P benign content. A reliability set adapted to this shape
+    /// names its categories in words and keeps attacks and benign inputs in separate categories, so its label decides.
+    /// </summary>
+    public bool InAttackCategory => Category.Length == 1 ? string.CompareOrdinal(Category, "I") <= 0 : Positive;
 }
 
 /// <summary>Breakdowns used by the report. Attack tags follow fixed rules; benign tags are assigned per fixture.</summary>

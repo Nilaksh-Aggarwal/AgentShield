@@ -59,6 +59,41 @@ public class EvaluationLogicTests
     }
 
     [Fact]
+    public void CommandLine_HeldOutReliabilitySet_HasItsOwnRealResults_AndOnlyHeldOutSetsAreAccepted()
+    {
+        var results = Path.Combine(Path.GetTempPath(), "results");
+        var heldOutResults = Path.Combine(results, "reliability-heldout");
+        string[] limits = ["--max-calls", "90", "--provider-rpm", "15", "--provider-rpd-remaining", "470"];
+
+        const string Retired = "--dataset heldout is retired to development data";
+        var plan = CommandLine.Parse(["plan", "--dataset", "heldout", .. limits], results);
+        Assert.Equal(("heldout", heldOutResults), (plan.Dataset, plan.Results));
+        Assert.Equal(CommandLine.LegacyDataset, CommandLine.Parse(["plan", .. limits], results).Dataset);
+
+        // Held-out v1 is retired (ADR 0027): no new session or baseline, whatever the other options; its report and scan
+        // stay available.
+        foreach (var command in new[] { "plan", "final", "simulate", "baseline" })
+        {
+            Assert.Contains(CommandLine.Parse([command, "--dataset", "heldout", .. limits, "--results", heldOutResults], results).Problems, problem => problem.StartsWith(Retired, StringComparison.Ordinal));
+        }
+
+        Assert.Empty(CommandLine.Parse(["report", "--dataset", "heldout"], results).Problems);
+        Assert.Empty(CommandLine.Parse(["scan", "--dataset", "heldout", "file.md"], results).Problems);
+
+        // A held-out set never shares the legacy store, and never starts again in an empty directory.
+        Assert.Contains(CommandLine.Parse(["final", "--dataset", "heldout", .. limits, "--results", results], results).Problems, problem => problem.StartsWith("A real run reads and writes only", StringComparison.Ordinal));
+        Assert.Contains(CommandLine.Parse(["final", "--dataset", "heldout", .. limits, "--results", Path.Combine(results, "other")], results).Problems, problem => problem.StartsWith("A real run reads and writes only", StringComparison.Ordinal));
+        Assert.Equal([Retired], CommandLine.Parse(["final", "--results", heldOutResults, "--dataset", "heldout", .. limits], results).Problems.Select(problem => problem[..Retired.Length]));
+        Assert.NotEmpty(CommandLine.Parse(["final", "--dataset", "heldout"], results).Problems);
+
+        // Development data and unknown names are refused before anything is loaded or sent.
+        foreach (var name in new[] { "tuning", "legacy-v1", "heldout-v1", "../heldout", "heldout-v99", string.Empty })
+        {
+            Assert.NotEmpty(CommandLine.Parse(["plan", "--dataset", name, .. limits], results).Problems);
+        }
+    }
+
+    [Fact]
     public void RealRun_OnlyWithTheRealProviderTheSystemClockAndTheCommittedConfiguration()
     {
         SessionOptions real = new() { Mode = RunMode.Real, MaxCalls = 90, SpacingSeconds = 20, ProviderRpm = 15, ProviderRpdRemaining = 470 };
@@ -117,6 +152,51 @@ public class EvaluationLogicTests
         Assert.Equal(expected, reason);
     }
 
+    public static TheoryData<string[], string?> StopSequencesWhenSlowCallsContinue() => new()
+    {
+        // A completed slow call or stage is a valid result: it no longer ends the session ...
+        { ["Completed", "slow-call", "slow-stage", "Completed"], null },
+        // ... while every failure still does, exactly as with the default rules.
+        { ["slow-call", "429"], "HTTP 429 from Gemini (rate limited)" },
+        { ["slow-call", "TimedOut"], "AI analysis timed out" },
+        { ["503", "Completed", "503"], "second HTTP 5xx / unavailable answer from Gemini" },
+        { ["503", "MalformedResponse"], "two failed AI analyses in a row" },
+        { ["slow-call", "circuit-open"], "circuit Open" },
+    };
+
+    [Theory]
+    [MemberData(nameof(StopSequencesWhenSlowCallsContinue))]
+    public void StopRules_WhenSlowCallsContinue_StillStopAtEveryFailure(string[] sequence, string? expected)
+    {
+        var rules = new StopRules(stopOnSlowCalls: false);
+        string? reason = null;
+        foreach (var step in sequence)
+        {
+            reason = rules.After(Attempt(step), refusedByObserver: 0);
+            if (reason is not null)
+            {
+                break;
+            }
+        }
+
+        Assert.Equal(expected, reason);
+        Assert.NotNull(new StopRules(stopOnSlowCalls: false).After(Attempt("Completed"), refusedByObserver: 1));
+    }
+
+    [Fact]
+    public void CommandLine_WarmUpAndSlowCallTolerance_AreOptIn()
+    {
+        var results = Path.Combine(Path.GetTempPath(), "results");
+        string[] limits = ["--max-calls", "90", "--provider-rpm", "15", "--provider-rpd-remaining", "470"];
+
+        var standard = CommandLine.Parse(["final", .. limits], results);
+        var resilient = CommandLine.Parse(["final", .. limits, "--warm-up", "--continue-after-slow-calls"], results);
+
+        Assert.Equal((false, false), (standard.WarmUp, standard.ContinueAfterSlowCalls));
+        Assert.Equal((true, true), (resilient.WarmUp, resilient.ContinueAfterSlowCalls));
+        Assert.Empty(resilient.Problems);
+    }
+
     [Fact]
     public void StopRules_StopOnARefusedRequest_AnApiError_OrADeterministicBlockThatReachedTheProvider()
     {
@@ -154,6 +234,24 @@ public class EvaluationLogicTests
         Assert.DoesNotContain(excluded.Order, item => item.Fixture.Id == "C05");
         Assert.All(benign.Order, item => Assert.False(item.Fixture.InAttackCategory));
         Assert.Equal(63, plan.InSubset);
+    }
+
+    [Fact]
+    public void Planner_AFixtureSentWithoutAResult_IsNeverPlannedAsNeverAttempted()
+    {
+        // C02 has a send record but no attempt record: the process ended while its call was in flight.
+        var baseline = Set.Value.Fixtures.ToDictionary(f => f.Id, f => Baseline(f.Id, Labels.Allow), StringComparer.Ordinal);
+        var sent = new HashSet<string>(StringComparer.Ordinal) { "C02" };
+
+        // Whether or not previously failed fixtures are retried, one that may have reached the provider without a
+        // result is never planned again (it is not a recorded failure that a later session may decide to retry).
+        foreach (var excludeFailed in new[] { true, false })
+        {
+            var plan = Planner.Create(Set.Value, baseline, [], Subset.Attacks, excludeFailed, sent);
+
+            Assert.DoesNotContain(plan.Order, item => item.Fixture.Id == "C02");
+            Assert.Equal((1, 0, 0), (plan.SentWithoutResult, plan.ExcludedFailed, plan.PreviouslyFailed));
+        }
     }
 
     // ── Records ─────────────────────────────────────────────────────────────────────────────────────────────────────

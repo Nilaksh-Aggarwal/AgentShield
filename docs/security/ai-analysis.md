@@ -287,8 +287,9 @@ provider. The initial `RedactingAiDisclosurePolicy`:
 
 - sends the normalised text, never the original;
 - masks secrets with the log-redaction rules (`SensitiveDataRedactor`: bearer tokens, JWTs, `password=`-style
-  assignments, `sk-`/`AKIA`/`ghp_` keys). If redaction times out, the content is **withheld** (Review), never sent
-  unredacted;
+  assignments, `sk-`/`AKIA`/`ghp_` keys). A redaction that times out is run once more from the original text (a
+  starved thread, not the text, is the usual cause; ADR 0027). If it times out again, the content is **withheld**
+  (Review), never sent unredacted or partially redacted;
 - withholds content over 65,536 characters (before and after masking); never truncates.
 
 The deterministic detectors always analyse the full, unredacted input; the policy only limits what leaves the process.
@@ -931,7 +932,31 @@ dotnet run --project tests/AgentShield.Evaluation -- scan docs/PROGRESS.md      
 `--subset attacks|benign` runs categories A–I or J–P only; `--exclude-failed` leaves out fixtures whose earlier attempts
 failed. `plan` and `final` read and write only the real store (`tests/Evaluation/results`), where completed fixtures
 are recorded, so another `--results` directory is refused (it would send them again; defect D-13 in
-[defect-matrix.md](defect-matrix.md)); `simulate` must use its own directory. Every session:
+[defect-matrix.md](defect-matrix.md)); `simulate` must use its own directory.
+
+`--dataset heldout` (or a later `heldout-vN`) runs a held-out reliability set instead of this set
+([ADR 0026](../decisions/0026-versioned-held-out-sets-and-real-model-runs.md)):
+- its real store is `tests/Evaluation/results/reliability-<set>`, and any other directory is refused;
+- `--subset` follows the labels, and tuning sets are refused;
+- the reliability report shows its real sessions apart from deterministic and simulated results.
+
+**Resume safeguards and opt-in resilience** (evaluation only; the product and its 3 s timeout are unchanged):
+- **Write-ahead send record.** `sends.jsonl` gets a line immediately before any fixture that may reach the provider is
+  sent. A fixture with a send record but no attempt record (the process died mid-call) may have reached the provider,
+  so it is never planned again, with or without `--exclude-failed`.
+- **`--warm-up`.** Before the first fixture, one fixed text that is in no dataset runs through a separate in-process host
+  whose provider is the local simulator: nothing leaves the process, and the session host's circuit, capacity and
+  metrics are untouched.
+  - It pays the process's one-time start-up cost of the AI stage before the 3 s timeout applies. Measured with a
+    fake provider: 511 ms on a cold first call, 5 ms after a warm-up.
+  - `plan` never runs it.
+- **`--continue-after-slow-calls`.** A call or stage that *completed* close to the timeout (≥ 2,500 / 2,700 ms) is a
+  valid result: it is recorded and no longer ends the session.
+  - Every failure still does: the first 429, the second 5xx, a timeout, two failures in a row, a circuit that is not
+    closed, a refused request, an API error.
+  - The default keeps the original rule.
+
+Every session:
 
 1. **Recomputes the deterministic baseline** (AI off, zero provider calls) and refuses to continue if it differs from the
    stored one (the detectors changed) or if the stored sessions used other fixture texts (input fingerprint). A label

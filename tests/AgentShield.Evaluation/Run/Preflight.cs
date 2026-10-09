@@ -46,6 +46,7 @@ internal static class Preflight
         Row("Gemini key", "configured: " + configuration.GetValueOrDefault("Ai:Gemini:ApiKey configured"));
         Row("Subset", Invariant($"{options.Subset} ({plan.InSubset} fixtures): {plan.AlreadyValid} already have a valid result and are not sent again; {plan.Order.Count} pending"));
         Row("Order", Invariant($"{plan.ZeroCall} deterministic Blocks (zero provider calls, never sent to Gemini) -> {plan.NeverAttempted} never attempted -> {plan.PreviouslyFailed} previously failed (last){(plan.ExcludedFailed > 0 ? Invariant($"; {plan.ExcludedFailed} previously failed excluded") : string.Empty)}"));
+        Row("Resend guard", Invariant($"only fixtures without an attempt record and without a send record count as never attempted; {plan.SentWithoutResult} sent without a recorded result (never planned again){(options.ExcludeFailed ? "; previously failed fixtures are excluded, so no fixture is sent twice" : "; previously failed fixtures (recorded failures) are sent again last")}"));
         Row("Provider calls", Invariant($"needed {calls}; HARD CAP {options.MaxCalls} (a request beyond it is refused before sending){(calls > options.MaxCalls ? Invariant($"; {calls - options.MaxCalls} stay pending") : string.Empty)}"));
         Row("Pacing", Invariant($"at least {options.SpacingSeconds} s between calls = at most {perMinute:0.#} per minute{(options.ProviderRpm is { } rpm ? Invariant($"; provider RPM {rpm} -> {100 * perMinute / rpm:0} %") : string.Empty)}"));
         if (options.ProviderRpdRemaining is { } remaining)
@@ -58,7 +59,12 @@ internal static class Preflight
         Row("Tokens", measured.Count == 0
             ? "AgentShield reserves a conservative local estimate per call; no measured usage yet"
             : Invariant($"earlier real calls: {measured.Average(a => a.ProviderCall!.PromptTokens!.Value):0} prompt / {measured.Average(a => a.ProviderCall!.TotalTokens ?? 0):0} total tokens per call; AgentShield reserved {measured.Average(a => (double)a.EstimatedInputTokens):0} (local estimate)"));
-        Row("Stop rules", "first HTTP 429; second 5xx/unavailable; AI timeout; Gemini call >= 2,500 ms; AI stage >= 2,700 ms after the first call; two failed analyses in a row; circuit not Closed; any refused request; API error");
+        Row("Stop rules", options.StopOnSlowCalls
+            ? "first HTTP 429; second 5xx/unavailable; AI timeout; Gemini call >= 2,500 ms; AI stage >= 2,700 ms after the first call; two failed analyses in a row; circuit not Closed; any refused request; API error"
+            : "first HTTP 429; second 5xx/unavailable; AI timeout; two failed analyses in a row; circuit not Closed; any refused request; API error (completed calls at or above 2,500 ms are recorded and do not stop the session)");
+        Row("Warm-up", options.WarmUp
+            ? "before the first fixture, one fixed non-dataset text through a separate host and the local simulator: 0 network requests"
+            : "none (the first real call pays the process's start-up cost inside the 3 s timeout)");
         Row("Output", store.Directory + " (fixture IDs, codes, statuses and numbers only)");
         if (options.LogDirectory is { } logs)
         {

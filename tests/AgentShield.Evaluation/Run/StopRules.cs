@@ -7,7 +7,12 @@ namespace AgentShield.Evaluation.Run;
 /// The session's safety stop rules, applied after every attempt. Nothing is ever retried: a stopped session leaves the
 /// remaining fixtures pending for a later, explicitly started session.
 /// </summary>
-internal sealed class StopRules
+/// <param name="stopOnSlowCalls">
+/// Whether a call or stage that completed but came close to the 3 s timeout ends the session (the default). A real run may
+/// switch it off (<c>--continue-after-slow-calls</c>): a completed slow call is a valid result, and the failures it warns
+/// of (a timeout, an unavailable provider, two failures in a row) still stop the session.
+/// </param>
+internal sealed class StopRules(bool stopOnSlowCalls = true)
 {
     /// <summary>A Gemini call this slow is close to the 3 s stage timeout.</summary>
     public const double SlowProviderCallMs = 2_500;
@@ -57,8 +62,8 @@ internal sealed class StopRules
         _failuresInARow = attempt.AiStatus == "Completed" ? 0 : _failuresInARow + 1;
         return _serverErrors >= 2 ? "second HTTP 5xx / unavailable answer from Gemini"
             : attempt.AiStatus == "TimedOut" ? "AI analysis timed out"
-            : call?.DurationMs >= SlowProviderCallMs ? "Gemini call at or above 2,500 ms"
-            : !firstCall && attempt.AiStageMs >= SlowStageMs ? "AI stage at or above 2,700 ms"
+            : stopOnSlowCalls && call?.DurationMs >= SlowProviderCallMs ? "Gemini call at or above 2,500 ms"
+            : stopOnSlowCalls && !firstCall && attempt.AiStageMs >= SlowStageMs ? "AI stage at or above 2,700 ms"
             : attempt.CircuitAfter is { } circuit && circuit != "Closed" ? "circuit " + circuit
             : _failuresInARow >= 2 ? "two failed AI analyses in a row"
             : null;

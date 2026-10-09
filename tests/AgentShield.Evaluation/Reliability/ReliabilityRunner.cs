@@ -251,4 +251,11 @@ internal static class ReliabilityRunner
     public static string RunFile(string label, string split, ReliabilityMode mode) =>
         $"{label}-{split}-{(mode == ReliabilityMode.Deterministic ? "deterministic" : "ai-unavailable")}.json";
 
+    /// <summary>
+    /// Where the AI evaluation runner keeps a real-Gemini run of a held-out split: its own folder inside the AI results
+    /// directory (<c>tests/Evaluation/results/reliability-heldout</c>), so completed fixtures of one set are never sent
+    /// again and never mixed with another set's results.
+    /// </summary>
+    public static string RealRunDirectory(string aiResults, string split) => Path.Combine(aiResults, "reliability-" + split);
+
 }

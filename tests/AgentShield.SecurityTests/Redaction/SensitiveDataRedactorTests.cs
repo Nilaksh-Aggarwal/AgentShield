@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using AgentShield.Security.Redaction;
 
 namespace AgentShield.SecurityTests.Redaction;
@@ -119,6 +120,59 @@ public class SensitiveDataRedactorTests
     public void RedactValue_LeavesOrdinaryTextUntouched(string input)
     {
         Assert.Equal(input, SensitiveDataRedactor.RedactValue(input));
+    }
+
+    // A timeout caused by a stalled thread (the match timeout is wall-clock time) is retried once; a second one masks
+    // the whole value. The redaction is supplied, so the timeouts are deterministic.
+
+    [Theory]
+    [InlineData("The password policy requires 12 characters", "The password policy requires 12 characters")]
+    [InlineData("Host=db;Password=hunter2;Database=x", "Host=db;Password=" + SensitiveDataRedactor.Mask + ";Database=x")]
+    [InlineData("Authorization: Bearer abc.def-ghi", "Authorization: Bearer " + SensitiveDataRedactor.Mask)]
+    public void TryRedactValue_FirstAttemptTimesOut_RetriesOnce_AndReturnsTheFullRedaction(string input, string expected)
+    {
+        var attempts = 0;
+        string Redact(string value) => ++attempts == 1 ? throw new RegexMatchTimeoutException() : SensitiveDataRedactor.RedactSecrets(value);
+
+        var scanned = SensitiveDataRedactor.TryRedactValue(input, out var redacted, Redact);
+
+        Assert.True(scanned);
+        Assert.Equal(2, attempts);
+        Assert.Equal(expected, redacted);
+    }
+
+    [Theory]
+    [InlineData("The password policy requires 12 characters")]
+    [InlineData("Host=db;Password=hunter2;Database=x")]
+    [InlineData("using key AKIAIOSFODNN7EXAMPLE now")]
+    public void TryRedactValue_BothAttemptsTimeOut_MasksTheWholeValue_AndNeverReturnsContent(string input)
+    {
+        var attempts = 0;
+        string Redact(string value)
+        {
+            attempts++;
+            throw new RegexMatchTimeoutException();
+        }
+
+        var scanned = SensitiveDataRedactor.TryRedactValue(input, out var redacted, Redact);
+
+        Assert.False(scanned);
+        Assert.Equal(2, attempts);
+        Assert.Equal(SensitiveDataRedactor.Mask, redacted);
+    }
+
+    [Fact]
+    public void TryRedactValue_WithoutATimeout_RunsOnce_AndEqualsRedactValue()
+    {
+        const string input = "password=hunter2 and api_key: 'k-123'";
+        var attempts = 0;
+
+        var scanned = SensitiveDataRedactor.TryRedactValue(input, out var redacted, value => { attempts++; return SensitiveDataRedactor.RedactSecrets(value); });
+
+        Assert.True(scanned);
+        Assert.Equal(1, attempts);
+        Assert.Equal(SensitiveDataRedactor.RedactValue(input), redacted);
+        Assert.DoesNotContain("hunter2", redacted, StringComparison.Ordinal);
     }
 
     [Fact]

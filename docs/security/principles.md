@@ -69,7 +69,7 @@ jailbreaks.
 | Swagger disabled outside Development by default | `ApiOptions.SwaggerEnabled` |
 | Secrets never in source; NuGet restores only from nuget.org | user-secrets / env vars; `nuget.config` |
 | Configuration validated at startup | Options `ValidateOnStart` |
-| Regexes used on untrusted input have timeouts; redaction fails closed on timeout | `SensitiveDataRedactor` |
+| Regexes used on untrusted input have timeouts; redaction retries a timed-out pass once, then fails closed (ADR 0027) | `SensitiveDataRedactor` |
 | Detection regexes run in linear time (`NonBacktracking`) with a 250 ms timeout; enforced for every rule by a test | `DetectionPatterns`, `DetectorContractTests`, `ObfuscationBoundsTests` |
 | Decoding and unmasking are bounded (2 layers, 16 views, 65,536 chars per view, linear, never recursive) and fail safe: content over a limit goes to Review, never silently skipped; a decoder alone never raises a finding (ADR 0011) | `ObfuscationDetector`, `ObfuscationLimits`, `ObfuscationBoundsTests` |
 | Duplicate findings fused deterministically before risk (no score inflation, order independent of detectors) | `FindingAggregator`, `FindingAggregatorTests` |

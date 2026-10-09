@@ -27,7 +27,8 @@ internal sealed record EvaluationPlan(
     int ZeroCall,
     int NeverAttempted,
     int PreviouslyFailed,
-    int ExcludedFailed)
+    int ExcludedFailed,
+    int SentWithoutResult = 0)
 {
     public int AiCallsNeeded => Order.Count(item => item.NeedsAi);
 }
@@ -38,15 +39,20 @@ internal static class Planner
     /// Fixtures in <paramref name="subset"/> without a valid attempt (AI completed, or not needed for a deterministic
     /// Block), in this order: deterministic Blocks (zero provider calls), fixtures never attempted, then fixtures whose
     /// earlier attempts failed (last, so one input that keeps failing cannot hold up the rest; left out entirely with
-    /// <paramref name="excludeFailed"/>). Each group keeps a fixed, interleaved order.
+    /// <paramref name="excludeFailed"/>). Each group keeps a fixed, interleaved order. A fixture in
+    /// <paramref name="sentWithoutResult"/> (a send record without an attempt: the process ended while its call was in
+    /// flight) may have reached the provider without leaving a result, so it is never planned again, whatever
+    /// <paramref name="excludeFailed"/> says.
     /// </summary>
     public static EvaluationPlan Create(
         EvaluationDataset dataset,
         IReadOnlyDictionary<string, BaselineRecord> baseline,
         IReadOnlyList<AttemptRecord> attempts,
         Subset subset,
-        bool excludeFailed)
+        bool excludeFailed,
+        IReadOnlySet<string>? sentWithoutResult = null)
     {
+        sentWithoutResult ??= new HashSet<string>(StringComparer.Ordinal);
         var inSubset = dataset.Fixtures.Where(fixture => subset switch
         {
             Subset.Attacks => fixture.InAttackCategory,
@@ -69,6 +75,11 @@ internal static class Planner
             }
 
             var needsAi = baseline[fixture.Id].Decision != Labels.Block;
+            if (needsAi && earlier.Count == 0 && sentWithoutResult.Contains(fixture.Id))
+            {
+                continue;
+            }
+
             var planned = new PlannedFixture(fixture, needsAi, earlier.Count);
             if (!needsAi)
             {
@@ -90,7 +101,8 @@ internal static class Planner
 
         return new EvaluationPlan(
             subset, [.. zeroCall, .. neverAttempted, .. previouslyFailed], inSubset.Count, alreadyValid, zeroCall.Count,
-            neverAttempted.Count, previouslyFailed.Count, excluded);
+            neverAttempted.Count, previouslyFailed.Count, excluded,
+            inSubset.Count(fixture => sentWithoutResult.Contains(fixture.Id) && !byFixture.ContainsKey(fixture.Id)));
     }
 
     /// <summary>Fixed across dataset versions (the salt names v1), so a resumed run keeps the Milestone 7 order.</summary>

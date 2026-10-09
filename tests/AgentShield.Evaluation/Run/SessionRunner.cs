@@ -66,6 +66,17 @@ internal sealed record SessionOptions
 
     /// <summary>How long to wait (wall clock) for a call the stage abandoned at its timeout to end, so it is recorded.</summary>
     public TimeSpan InFlightGrace { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Before the first fixture, analyse one fixed text that is in no dataset through a separate in-process host whose
+    /// provider is the local simulator (<see cref="SimulatedGemini"/>): nothing leaves the process, and the session host's
+    /// circuit, capacity and metrics are untouched. It pays the process's one-time start-up cost of the AI stage (about
+    /// 0.35–0.5 s), which a session's first real call would otherwise spend inside the committed 3 s stage timeout.
+    /// </summary>
+    public bool WarmUp { get; init; }
+
+    /// <summary>A completed call close to the timeout ends the session (default); see <see cref="StopRules"/>.</summary>
+    public bool StopOnSlowCalls { get; init; } = true;
 }
 
 internal sealed record SessionResult(int ExitCode, EvaluationPlan? Plan, SessionRecord? Session, IReadOnlyList<AttemptRecord> Attempts, IReadOnlyList<string> Problems)
@@ -81,6 +92,9 @@ internal static class SessionRunner
     public const string EvaluatedModel = "gemini-3.5-flash-lite";
 
     private static readonly string[] NormalEnds = ["all planned fixtures sent", "request cap reached"];
+
+    /// <summary>The API's input limit (<c>AnalyzeInputRequest.MaxInputLength</c>); the too-long probe must exceed it.</summary>
+    private const int MaxInputLength = 32_000;
 
     public static async Task<SessionResult> RunAsync(EvaluationDataset dataset, ResultStore store, SessionOptions options, CancellationToken cancellationToken = default)
     {
@@ -195,7 +209,21 @@ internal static class SessionRunner
         }
 
         var baseline = baselineRun.Records.ToDictionary(record => record.FixtureId, StringComparer.Ordinal);
-        var plan = Planner.Create(dataset, baseline, attempts, options.Subset, options.ExcludeFailed);
+        var plan = Planner.Create(dataset, baseline, attempts, options.Subset, options.ExcludeFailed, store.SentWithoutResult());
+
+        // 3a. Optional warm-up: a separate host and the local simulator, never the provider (see SessionOptions.WarmUp).
+        string? warmUpNote = null;
+        if (options.WarmUp && !options.PlanOnly)
+        {
+            var warmUp = await WarmUpAsync();
+            if (warmUp.Problem is not null)
+            {
+                return refuse([warmUp.Problem], plan);
+            }
+
+            warmUpNote = warmUp.Note;
+            say(warmUp.Note);
+        }
 
         // 3. The AI host: committed configuration plus the evaluated model (and test settings outside real runs).
         var observer = new ObserverState(options.MaxCalls, options.Clock, options.FakeTransport);
@@ -225,7 +253,7 @@ internal static class SessionRunner
             }
 
             // 4. The paced loop. Nothing is retried; a stop leaves the rest pending for a later session.
-            var stopRules = new StopRules();
+            var stopRules = new StopRules(options.StopOnSlowCalls);
             long? lastCallStarted = null;
             var index = 0;
             foreach (var item in plan.Order)
@@ -255,6 +283,12 @@ internal static class SessionRunner
                 var startedUtc = DateTimeOffset.UtcNow;
                 var sentAt = options.Clock.GetTimestamp();
                 observer.Current = fixture;
+                if (item.NeedsAi)
+                {
+                    // Write-ahead: recorded before the request can leave, so a run that dies mid-call never resends it.
+                    store.Append(new SendRecord(sessionId, fixture.Id, DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)));
+                }
+
                 observer.SendAllowed = item.NeedsAi;
                 var exchange = await host.PostAsync(fixture.Text, correlation);
                 observer.SendAllowed = false;
@@ -322,10 +356,11 @@ internal static class SessionRunner
                 probes.Add(new ProbeResult(name, exchange.Status, echoed));
             }
 
-            await ProbeAsync("unknown-property-400", null, true, JsonSerializer.Serialize(new { input = dataset.Get("A07").Text, note = true }));
-            await ProbeAsync("too-long-422", string.Concat(Enumerable.Repeat(dataset.Get("H01").Text + " ", 400)), true);
-            await ProbeAsync("no-api-key-401", dataset.Get("D01").Text, false);
-            await ProbeAsync("malformed-json-400", null, true, "{\"input\": " + JsonSerializer.Serialize(dataset.Get("G03").Text));
+            var tooLong = ProbeText(dataset, "H01", 1);
+            await ProbeAsync("unknown-property-400", null, true, JsonSerializer.Serialize(new { input = ProbeText(dataset, "A07", 0), note = true }));
+            await ProbeAsync("too-long-422", string.Concat(Enumerable.Repeat(tooLong + " ", Math.Max(400, (MaxInputLength / (tooLong.Length + 1)) + 1))), true);
+            await ProbeAsync("no-api-key-401", ProbeText(dataset, "D01", 2), false);
+            await ProbeAsync("malformed-json-400", null, true, "{\"input\": " + JsonSerializer.Serialize(ProbeText(dataset, "G03", 3)));
             if (observer.Calls.Count != callsBeforeProbes)
             {
                 stopReason += "; an error probe reached the provider";
@@ -381,7 +416,8 @@ internal static class SessionRunner
             sessionId, options.Mode.ToString(), started.ToString("O", CultureInfo.InvariantCulture), DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
             dataset.Version, inputFingerprint, dataset.ContentFingerprint(), baselineFingerprint, options.Subset.ToString(), options.MaxCalls, options.SpacingSeconds,
             options.ProviderRpm, options.ProviderRpdRemaining, options.ExcludeFailed, configuration, plan.Order.Count, sessionAttempts.Count,
-            calls.Count, observer.Refused, stopReason, stopFixture, probes, check.Count, leakHits, leaks, warnings, null);
+            calls.Count, observer.Refused, stopReason, stopFixture, probes, check.Count, leakHits, leaks, warnings,
+            SessionNote(warmUpNote, options.StopOnSlowCalls));
         store.Append(session);
         store.WriteReport(ReportBuilder.Build(dataset, store.LoadBaseline(), store.LoadAttempts(), store.LoadSessions()));
 
@@ -459,6 +495,44 @@ internal static class SessionRunner
             }
         }
     }
+
+    private const string WarmUpText = "Warm-up request: summarise this sentence about tomorrow's weather in five words.";
+    private const string WarmUpKey = "warm-up-simulated-key-not-real-0000";
+
+    /// <summary>
+    /// Runs <see cref="WarmUpText"/> once through a separate host with the local simulator. Refuses the session when the
+    /// warm-up does not complete, or when anything but the simulator answered (it never forwards to the network).
+    /// </summary>
+    private static async Task<(string? Problem, string Note)> WarmUpAsync()
+    {
+        var observer = new ObserverState(1, TimeProvider.System, SimulatedGemini.Transport) { SendAllowed = true };
+        var host = EvaluationHost.Start(new HostSettings(true, [new("Ai:Model", EvaluatedModel), new("Ai:Gemini:ApiKey", WarmUpKey)], null), observer);
+        await using (host)
+        {
+            var exchange = await host.PostAsync(WarmUpText, "eval-warm-up");
+            var analysis = Analysis.From(exchange, host.Sink, "eval-warm-up");
+            var note = Invariant($"warm-up: separate host, local simulator, 0 network requests, AI stage {analysis.AiStageMs ?? 0:0} ms");
+            return exchange.Status == 200 && analysis.AiStatus == "Completed" && observer.Calls.Count == 1 && observer.Calls.All(call => call.HttpStatus == 200)
+                ? (null, note)
+                : (Invariant($"The warm-up did not complete (HTTP {exchange.Status}, AI {analysis.AiStatus ?? "none"}, simulator calls {observer.Calls.Count}); nothing was sent to the provider."), note);
+        }
+    }
+
+    private static string? SessionNote(string? warmUp, bool stopOnSlowCalls) =>
+        (warmUp, stopOnSlowCalls) switch
+        {
+            (null, true) => null,
+            (null, false) => "completed slow calls do not stop the session",
+            (_, true) => warmUp,
+            _ => warmUp + "; completed slow calls do not stop the session",
+        };
+
+    /// <summary>
+    /// A fixture text for an error probe: the legacy set's own probe fixtures, so its sessions stay comparable; another set
+    /// (a held-out reliability set) uses a fixture at a fixed position.
+    /// </summary>
+    private static string ProbeText(EvaluationDataset dataset, string legacyId, int position) =>
+        (dataset.Fixtures.FirstOrDefault(fixture => fixture.Id == legacyId) ?? dataset.Fixtures[position % dataset.Fixtures.Count]).Text;
 
     private static async Task WaitForInFlightAsync(ObserverState observer, TimeSpan grace)
     {

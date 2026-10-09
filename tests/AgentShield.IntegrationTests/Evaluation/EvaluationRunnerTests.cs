@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text.Json;
+using AgentShield.Evaluation;
 using AgentShield.Evaluation.Dataset;
 using AgentShield.Evaluation.Hosting;
+using AgentShield.Evaluation.Reliability;
 using AgentShield.Evaluation.Results;
 using AgentShield.Evaluation.Run;
 using AgentShield.Evaluation.Safety;
@@ -85,7 +87,112 @@ public sealed class EvaluationRunnerTests : IDisposable
         check.Add("fake-gemini-key", FakeKey, shingles: false);
         check.Add("description", DescriptionMarker, shingles: false);
         Assert.All(check.ScanFiles(store.ArtifactFiles()), file => Assert.Empty(file.Labels));
-        Assert.Equal(["attempts.jsonl", "baseline.jsonl", "report.md", "sessions.jsonl"], store.ArtifactFiles().Select(Path.GetFileName));
+        Assert.Equal(["attempts.jsonl", "baseline.jsonl", "report.md", "sends.jsonl", "sessions.jsonl"], store.ArtifactFiles().Select(Path.GetFileName));
+
+        // A send record precedes every fixture that may reach the provider, and none precedes a deterministic Block.
+        Assert.Equal(calls.Select(attempt => attempt.FixtureId).Order(StringComparer.Ordinal), store.LoadSends().Select(send => send.FixtureId).Order(StringComparer.Ordinal));
+        Assert.Empty(store.SentWithoutResult());
+    }
+
+    [Fact]
+    public async Task Resume_AfterARunDiedMidCall_NeverResendsTheFixtureWhoseCallWasInFlight()
+    {
+        var store = new ResultStore(_directory);
+        await RunAsync(store, Answering(finding: false), subset: Subset.Attacks, maxCalls: 2);
+        var sentFirst = _sentFixtures.ToHashSet(StringComparer.Ordinal);
+        _sentFixtures.Clear();
+
+        // A fixture the first session never sent, now with a send record and no attempt: as if the process had been
+        // killed while its request was in flight.
+        var inFlight = Set.Value.Fixtures.First(fixture => fixture.InAttackCategory && !sentFirst.Contains(fixture.Id) && store.LoadAttempts().All(attempt => attempt.FixtureId != fixture.Id)).Id;
+        store.Append(new SendRecord("killed-session", inFlight, "2026-10-09T00:00:00Z"));
+
+        // Without --exclude-failed: the in-flight fixture is still never planned.
+        var resumed = await RunAsync(store, Answering(finding: false), subset: Subset.Attacks, excludeFailed: false);
+
+        Assert.Equal((1, 0), (resumed.Plan!.SentWithoutResult, resumed.Plan.ExcludedFailed));
+        Assert.DoesNotContain(inFlight, _sentFixtures);
+        Assert.Empty(_sentFixtures.Intersect(sentFirst));
+        Assert.Equal(inFlight, Assert.Single(store.SentWithoutResult()));
+    }
+
+    [Fact]
+    public async Task WarmUp_UsesASeparateHostAndTheLocalSimulator_AndNeverTheSessionsProvider()
+    {
+        var store = new ResultStore(_directory);
+        FakeTransport sessionProvider = Answering(finding: false);
+
+        var result = await SessionRunner.RunAsync(Set.Value, store, new SessionOptions
+        {
+            Mode = RunMode.Test,
+            Subset = Subset.Attacks,
+            MaxCalls = 3,
+            SpacingSeconds = 20,
+            WarmUp = true,
+            StopOnSlowCalls = false,
+            FakeTransport = (request, fixture, token) =>
+            {
+                _sentFixtures.Enqueue(fixture?.Id ?? "(none)");
+                return sessionProvider(request, fixture, token);
+            },
+            Settings = [new("Ai:Gemini:ApiKey", FakeKey)],
+            Clock = _clock,
+            Delay = (wait, _) =>
+            {
+                _clock.Advance(wait);
+                return Task.CompletedTask;
+            },
+            Output = TextWriter.Null,
+        });
+
+        Assert.Equal(SessionResult.Completed, result.ExitCode);
+        // The session's provider saw only planned fixtures (no warm-up request, no fixture without an ID) ...
+        Assert.Equal(3, _sentFixtures.Count);
+        Assert.DoesNotContain("(none)", _sentFixtures);
+        Assert.Equal(3, result.Session!.ProviderCalls);
+        // ... and the session records the warm-up and the slow-call setting.
+        Assert.StartsWith("warm-up: separate host, local simulator, 0 network requests, AI stage ", result.Session.Note, StringComparison.Ordinal);
+        Assert.EndsWith("; completed slow calls do not stop the session", result.Session.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain(store.LoadAttempts(), attempt => attempt.FixtureId.StartsWith("warm", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task HeldOutReliabilitySet_FullSession_SendsOnlyWhatTheRulesDoNotBlock_AndIsNeverReportedAsReal()
+    {
+        var heldOut = ReliabilityDataset.Load(ReliabilityDataset.HeldOut);
+        var adapted = heldOut.ToEvaluationDataset();
+        var store = new ResultStore(ReliabilityRunner.RealRunDirectory(_directory, ReliabilityDataset.HeldOut));
+
+        var result = await RunAsync(store, Answering(finding: false), dataset: adapted);
+
+        Assert.Equal(SessionResult.Completed, result.ExitCode);
+        var session = Assert.IsType<SessionRecord>(result.Session);
+        Assert.Equal(("all planned fixtures sent", 0), (session.StopReason, session.LeakHits));
+        Assert.Equal([400, 422, 401, 400], session.ErrorProbes.Select(probe => probe.HttpStatus));
+        Assert.All(session.ErrorProbes, probe => Assert.False(probe.Echoed));
+        Assert.Equal(heldOut.Fixtures.Count, result.Attempts.Count);
+
+        // Deterministic Blocks never reach the provider; every other fixture is sent exactly once.
+        var blocks = result.Attempts.Where(attempt => attempt.DeterministicDecision == Labels.Block).Select(attempt => attempt.FixtureId).ToList();
+        Assert.NotEmpty(blocks);
+        Assert.Empty(_sentFixtures.Intersect(blocks));
+        Assert.Equal(heldOut.Fixtures.Count - blocks.Count, _sentFixtures.Count);
+        Assert.Equal(_sentFixtures.Count, _sentFixtures.Distinct(StringComparer.Ordinal).Count());
+
+        // An AI that finds nothing changes no decision: AI only adds findings.
+        Assert.All(result.Attempts, attempt => Assert.Equal(attempt.DeterministicDecision, attempt.Decision));
+        var check = LeakCheck.ForDataset(adapted);
+        check.Add("fake-gemini-key", FakeKey, shingles: false);
+        Assert.All(check.ScanFiles(store.ArtifactFiles()), file => Assert.Empty(file.Labels));
+
+        // The legacy set's report is never rewritten from this held-out store (and the other way round).
+        Assert.NotNull(EvaluationProgram.ReportMismatch(Set.Value, store));
+        Assert.Null(EvaluationProgram.ReportMismatch(adapted, store));
+
+        // A test or simulated session is never reported as a real-Gemini result.
+        var report = ReliabilityReport.Build(_directory);
+        Assert.Contains("**No real-Gemini run of this set exists.**", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("real session(s)", report, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -270,7 +377,8 @@ public sealed class EvaluationRunnerTests : IDisposable
         int maxCalls = 150,
         bool excludeFailed = false,
         bool planOnly = false,
-        TextWriter? output = null)
+        TextWriter? output = null,
+        EvaluationDataset? dataset = null)
     {
         FakeTransport recording = (request, fixture, token) =>
         {
@@ -278,7 +386,7 @@ public sealed class EvaluationRunnerTests : IDisposable
             return transport(request, fixture, token);
         };
 
-        return SessionRunner.RunAsync(Set.Value, store, new SessionOptions
+        return SessionRunner.RunAsync(dataset ?? Set.Value, store, new SessionOptions
         {
             Mode = RunMode.Test,
             Subset = subset,

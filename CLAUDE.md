@@ -97,7 +97,9 @@ Hard dependency rules:
   - Reliability sets (`tests/Evaluation/reliability`, ADR 0025): develop rules only against the tuning split; the
     held-out split is pinned and never edited or tuned against, and labels never change to fit results. After a rule
     change, re-run `reliability --label final --split all` and store the results (`ReliabilitySetTests` fails on stale
-    results), and report deterministic and AI-assisted results separately.
+    results), and report deterministic and AI-assisted results separately. A held-out split the owner retires (ADR 0027:
+    held-out v1 since 2026-10-09) stays pinned and unedited, keeps its frozen results as its evidence, and is reported
+    as development data afterwards.
 - AI-assisted analysis rules (spec: `docs/security/ai-analysis.md`, ADR 0012):
   - Provider adapters implement `IAiSecurityAnalyzer` in `AgentShield.AI` and return the **raw** answer
     (`AiAnalysisOutput`, via `AiStructuredOutputParser`) or an `AiAnalysisErrors` failure. They never build

@@ -3,7 +3,7 @@
   "Split": "heldout",
   "DatasetFingerprint": "bb758c1ab300558a33a49b5fe4ab6211e77fa1ac9fc5fbe6a2a10f0ce0515d11",
   "Mode": "AI on, provider unavailable (simulated HTTP 503, no network)",
-  "RanAt": "2026-10-09T02:54:11.8670892+00:00",
+  "RanAt": "2026-10-09T08:14:21.6488823+00:00",
   "ProviderNetworkRequests": 0,
   "SimulatedProviderResponses": 3,
   "Outcomes": [
@@ -460,6 +460,7 @@
       "Status": 200,
       "Decision": "Review",
       "Codes": [
+        "InstructionOverride.ToolMisuse",
         "InconclusiveAnalysis.AiAnalysisIncomplete"
       ],
       "AiStatus": "CircuitOpen",
@@ -534,6 +535,7 @@
       "Status": 200,
       "Decision": "Review",
       "Codes": [
+        "InstructionOverride.ToolMisuse",
         "InconclusiveAnalysis.AiAnalysisIncomplete"
       ],
       "AiStatus": "CircuitOpen",
@@ -546,6 +548,7 @@
       "Status": 200,
       "Decision": "Review",
       "Codes": [
+        "InstructionOverride.ToolMisuse",
         "InconclusiveAnalysis.AiAnalysisIncomplete"
       ],
       "AiStatus": "CircuitOpen",

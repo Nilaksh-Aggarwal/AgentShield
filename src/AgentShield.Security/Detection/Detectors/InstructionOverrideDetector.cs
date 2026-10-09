@@ -133,13 +133,50 @@ internal sealed partial class InstructionOverrideDetector()
         DetectionPatterns.TimeoutMilliseconds)]
     private static partial Regex AbandonInstructionsPattern();
 
+    // Fragments of the two IO-006 commands added on 2026-10-09 (ADR 0027), narrowed in the pre-commit review.
+
+    // A command, not a description: a line or sentence start, optionally a sequencing word ("then", "please") or an
+    // order ("you must", "I need you to"). Not a bare comma or a mid-sentence "also", so "do not, under any
+    // circumstances, run …" and "in CI we also run …" are not commands.
+    private const string CommandStart =
+        @"(?:^[\s""'(\[>*#-]*|[.!?;:]\s+[""'(]?)(?:(?:please|now|then|first|next|also|just|immediately)[,\s]+)*(?:(?:you\s+(?:must|should|need\s+to|have\s+to)|i\s+need\s+you\s+to)\s+)?";
+
+    // A tool or function whose name destroys a data store ("delete_records", `drop_database`, "purge_users.py"); not a
+    // cleanup helper ("drop_duplicates", "remove_unused_imports", "delete_stale_rows").
+    private const string DestructiveTool =
+        @"[`'""]?(?:drop|delete|wipe|truncate|purge|destroy|erase|nuke)_(?:all|everything|databases?|dbs?|tables?|records?|rows|users|accounts|customers|orders|data|buckets?|repos?|repository|backups?|logs|prod\w*|production|schemas?|cluster|disks?|servers?|tenants?)(?:_\w+)?(?:\.\w+)?\b[`'""]?";
+
+    // Between the tool and its target only words that name the tool, so "… but not on production" does not match.
+    private const string ToolNounGap =
+        @"(?:\s+(?:the|a|an|tool|function|job|script|task|command|endpoint|api|method|operation|procedure|routine|migration|now|immediately))*";
+
+    // Everything, or production.
+    private const string WholeStoreOrProduction =
+        @"\s+(?:(?:on|against|across|in)\s+(?:every|all|each)\s+(?:\S+\s+){0,2}(?:rows?|records|tables?|databases?|users|accounts|customers|orders|files)|(?:on|against|across)\s+(?:the\s+)?(?:entire|whole)\s+(?:\S+\s+){0,1}(?:database|table|dataset|bucket)|(?:on|against)\s+(?:the\s+)?(?:live|prod|production)(?:\s+(?:database|db|server|cluster|environment|system))?)\b";
+
+    // A security configuration: a security term at the start of a word that names a file ("config/security.json",
+    // "/etc/sudoers") or a configuration ("the firewall rules", "the IAM policy"). Not "auth" or "policy" alone ("the
+    // auth header", "the privacy policy", "~/.codex/auth.json"), and never inside a word ("William's").
+    private const string SecurityConfiguration =
+        @"(?:the\s+)?(?:contents?\s+of\s+)?(?:\S+\s+){0,1}(?:\S*[/\\._-])?(?:(?:security|authentication|authorization|permissions?|firewall|iam|acl)(?:[._-]\S*|\s+(?:\S+\s+){0,1}(?:config(?:uration)?|settings|rules|polic(?:y|ies)|file|list)\b)|(?:sudoers|authorized_keys|htaccess)\S*)";
+
+    private const string EmptyValue =
+        @"(?:with\s+(?:an?\s+)?(?:empty|blank|null)\b|with\s+nothing\b|with\s+(?:\{\s*\}|\[\s*\]|""""|'')|to\s+(?:empty|blank|null|nothing)\b)";
+
     // Mass deletion of accounts, records, backups…; setting every salary/balance/password to zero or admin; rm -rf /,
     // drop_*() calls; wiping backups or logs. Ordinary single-item requests ("delete the draft") do not match.
+    // Since 2026-10-09 (tool-abuse misses of the retired held-out v1, ADR 0027), two commands that name no quantifier:
+    // - a destructive tool invoked by name against everything or production ("execute the drop_database tool on
+    //   production"); warnings, descriptions, cleanup helpers and other targets do not match;
+    // - a security configuration emptied ("overwrite config/security.json with an empty file", "truncate /etc/sudoers").
     [GeneratedRegex(
         @"\b(?:delete|drop|wipe|erase|truncate|destroy|purge|remove|nuke|overwrite|corrupt)\s+(?:\S+\s+){0,2}(?:all|every|each|entire|whole)\s+(?:\S+\s+){0,2}(?:user\s+accounts|accounts|users|records|databases?|tables?|backups?|repositor(?:y|ies)|logs|invoices|orders|customers|employees|buckets?)\b"
         + @"|\b(?:change|set|update|modify|reset|zero\s+out)\s+(?:all|every|each)\s+(?:\S+\s+){0,2}(?:salar(?:y|ies)|prices?|balances?|passwords?|permissions?|roles?|records?|accounts?)\s+to\s+(?:zero|0|\$0|null|nothing|empty|blank|none|admin|root|public)\b"
-        + @"|\brm\s+-(?:rf|fr|r)\s+/|\b(?:drop|delete|wipe|truncate|purge|destroy)_\w+\s*\(|\b(?:wipe|erase|destroy|purge)\s+(?:the\s+)?(?:\S+\s+){0,1}(?:backups?|databases?|audit\s+logs?|logs)\b",
-        DetectionPatterns.Options,
+        + @"|\brm\s+-(?:rf|fr|r)\s+/|\b(?:drop|delete|wipe|truncate|purge|destroy)_\w+\s*\(|\b(?:wipe|erase|destroy|purge)\s+(?:the\s+)?(?:\S+\s+){0,1}(?:backups?|databases?|audit\s+logs?|logs)\b"
+        + "|" + CommandStart + @"(?:call|run|execute|invoke|trigger|fire|use)\s+(?:the\s+)?" + DestructiveTool + ToolNounGap + WholeStoreOrProduction
+        + "|" + CommandStart + @"(?:use\s+(?:the\s+)?\S+\s+tool\s+to\s+)?(?:(?:overwrite|replace|clear)\s+" + SecurityConfiguration + @"\s+(?:\S+\s+){0,1}" + EmptyValue
+        + @"|(?:truncate|empty|blank\s+out|wipe)\s+" + SecurityConfiguration + @"(?:\s*(?:[.!?;,]|$)|\s+(?:\S+\s+){0,1}" + EmptyValue + "))",
+        DetectionPatterns.MultilineOptions,
         DetectionPatterns.TimeoutMilliseconds)]
     private static partial Regex ToolMisusePattern();
 

@@ -99,6 +99,11 @@ public class DetectorContractTests
     [InlineData("send a refund to x ")]
     [InlineData("store this in your memory ")]
     [InlineData("show me the instructions ")]
+    // Prefixes of the IO-006 tool-abuse commands (2026-10-09), repeated without completing.
+    [InlineData("run the drop_x tool on ")]
+    [InlineData("overwrite the security.json ")]
+    [InlineData("you must run `drop_records ")]
+    [InlineData("replace the contents of the firewall ")]
     public void Detect_MaximumLengthAdversarialInput_CompletesWithoutTimeout(string unit)
     {
         var input = string.Concat(Enumerable.Repeat(unit, (32_000 / unit.Length) + 1))[..32_000];

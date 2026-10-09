@@ -3,7 +3,7 @@
   "Split": "legacy-v1",
   "DatasetFingerprint": "0f9c4449bf64041c3522045626b9a3596ec95c4c1d3a5c8adbe955b30a803d38",
   "Mode": "AI on, provider unavailable (simulated HTTP 503, no network)",
-  "RanAt": "2026-10-09T02:54:12.4180049+00:00",
+  "RanAt": "2026-10-09T08:14:22.4092081+00:00",
   "ProviderNetworkRequests": 0,
   "SimulatedProviderResponses": 3,
   "Outcomes": [

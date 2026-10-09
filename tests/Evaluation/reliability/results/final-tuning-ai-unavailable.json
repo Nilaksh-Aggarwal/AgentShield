@@ -3,7 +3,7 @@
   "Split": "tuning",
   "DatasetFingerprint": "3b3bb33ccd600071fbb75fc8603bed42364efd06a382c582921eb26934783bd8",
   "Mode": "AI on, provider unavailable (simulated HTTP 503, no network)",
-  "RanAt": "2026-10-09T02:54:12.1521482+00:00",
+  "RanAt": "2026-10-09T08:14:22.0486736+00:00",
   "ProviderNetworkRequests": 0,
   "SimulatedProviderResponses": 3,
   "Outcomes": [

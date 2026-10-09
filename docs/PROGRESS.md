@@ -2403,3 +2403,154 @@ Evaluation-led detection work for Problem 2, plus the owner's permanent workflow
 - **Not handled:** multi-step jailbreaks, non-English and paraphrased attacks without AI, and document or image ingestion.
 - **Unexplained 500:** the 500 seen earlier on 2026-10-09 was not reproduced; its cause is unknown.
 - **Published commit failing:** `039fbc5` on GitHub fails one ApiTests test (count 15 vs 17); the working tree fixes it.
+
+## Reliability evidence, HTTP 500 root cause, held-out tooling (2026-10-09, second session)
+
+Follow-up to the D2 × F2 work. Report: [SUBMISSION_READINESS.md](../SUBMISSION_READINESS.md). Nothing was committed or
+pushed.
+
+### Delivered
+
+- **Baseline reproduced** on the clean `7a8e335`: 2,786 tests passed. The stored reliability results matched the code
+  (held-out 55/78 detected, 1/60 false positives; legacy 27/65).
+- **HTTP 500 root-caused and fixed:**
+  - **Cause:** `RegexMatchTimeoutException` from a cold NonBacktracking automaton under CPU contention. The timeout is
+    wall-clock time, checked when a state is added under the shared matcher's lock.
+  - **Reproduced:** 3 HTTP 500s on `/firewall/analyze` under 3 concurrent full runs plus 8 burner threads, plus a
+    deterministic lock-hold reproduction.
+  - **Fix:** `PatternRule.CountMatches` retries once; a second timeout still fails closed.
+  - **Tests:** `PatternTimeoutStallTests` fail without the retry and pass with it.
+- **Evaluation tooling** ([ADR 0026](decisions/0026-versioned-held-out-sets-and-real-model-runs.md)):
+  - versioned reliability sets (`heldout-vN`, `tuning-vN`, optional `language`);
+  - `reliability-check` (format, labels, secrets, shared IDs, held-out/tuning near duplicates);
+  - every held-out set must be pinned and baselined;
+  - false-negative rates and per-language tables in the report;
+  - `plan|final --dataset heldout` for a real Gemini run of a held-out set, in its own results folder and reported apart;
+  - leak scan of all reliability results.
+- **Detection unchanged:**
+  - The known misses are in data that must not be tuned against.
+  - Two agents asked to write new tuning and held-out sets without seeing the rules were stopped by a safety classifier
+    while writing attack examples, so nothing was produced and that route was not worked around.
+  - New data will be team-written or come from a public benchmark.
+- **Gemini checks (no call to Google):** a blank key stops startup; the `http-deterministic` profile runs with AI
+  disabled.
+- **Real-Gemini held-out evaluation** (`gemini-3.5-flash-lite`; owner-stated limits 15 RPM, 250,000 TPM, 500 RPD):
+  - **Run 1:** 44 calls (41 HTTP 200, 2 timeouts, 1 HTTP 503). It ended at the third safety stop: a slow completed
+    call, then cold first calls in new processes.
+  - **Resume:** approved separately, only the 48 never-attempted inputs. 48 of 48 completed: 0 HTTP 429, 0 timeouts,
+    0 5xx.
+  - **Total:** 92 calls, 0 HTTP 429, 0 leak hits, 0 inputs sent twice.
+  - **AI on, all 138 inputs:** recall 0.936 (73/78), precision 0.948 (73/77), false-positive rate 0.067 (4/60).
+    - Gemini caught 18 of 23 rule-missed attacks.
+    - It flagged 0 of 56 completed benign analyses; 3 provider failures were held for review.
+- **Resume safeguards (evaluation only):**
+  - write-ahead send records (`sends.jsonl`);
+  - an opt-in local warm-up (no network; the first-call stage overhead fell from 511 ms to 5 ms);
+  - opt-in continuation after *completed* slow calls; failure stops unchanged.
+
+### Verification (actual results, working tree)
+
+| Check | Result |
+|---|---|
+| `dotnet build --no-incremental` | 0 warnings, 0 errors |
+| `dotnet test` | **2,818 passed, 0 failed, 0 skipped** (Unit 837, Security 1,093, Api 585, Integration 303) |
+| `npm install` / lint / `npm test` / build | 0 vulnerabilities / clean / **402 passed** / built |
+| `npm run test:e2e` | **2,124 checks, 0 failed** on an idle machine; one Analyze step failed under the CPU-burning experiments (fixed 900 ms page-load wait) |
+| Real Gemini, held-out v1 (run 1 + resume) | 92 calls, 0 HTTP 429, 0 leak hits; 138 of 138 decided, 89 of 92 analyses completed; evaluation tests 91 passed after the runs |
+| Loaded round after the fix (3 concurrent full runs + 8 burners) | **0 timeout-caused 500s** in 3 × 2,808 tests; each run recorded only the 22 deliberate fault-injection 500s. Load-only failures: time-budget, rate-limit-window and Gemini-timeout tests, plus one redactor fail-safe |
+
+### Known limitations / open items
+
+- **D2 not demonstrated:**
+  - with AI on, the false-positive rate 0.067 is above 0.05;
+  - deterministic held-out recall 0.705 is below 0.90, and legacy recall is 0.415;
+  - the set is synthetic and author-biased, and the default model is unevaluated.
+- **Residual timeout risk:**
+  - A second stall during the retry still fails closed with 500; startup warm-up is not built.
+  - Under the same load, the redactor's fail-safe can mask ordinary text. With AI on, that input is then held for
+    Review.
+- **Not handled:** multi-step jailbreaks, paraphrased and non-English attacks without AI, and document or image ingestion.
+
+## Post-evaluation review: tool abuse, redactor timeout, held-out v1 retired (2026-10-09)
+
+Owner-requested review after the real-Gemini evaluation. No Gemini call was made. Nothing was committed or pushed.
+Decision: [ADR 0027](decisions/0027-retiring-held-out-v1.md).
+
+### Delivered
+
+- **Evaluation records verified and preserved.**
+  - Recomputed from the raw attempts: 92 calls (89 / 2 timeouts / 1 HTTP 503), 0 HTTP 429, 138 inputs once each.
+    AI on: recall 0.936, precision 0.948, false-positive rate 0.067. Deterministic: 55/78, 1/60.
+  - The real-Gemini records are byte-identical, and `ReliabilitySetTests` now pins them.
+- **Held-out v1 retired to development data.**
+  - Its results were frozen first (`results/frozen-heldout-v1`), and the data file stays pinned.
+  - The report labels later results as development numbers. `CLAUDE.md` gained one sentence (owner-visible diff).
+- **Tool abuse (IO-006, Medium → Review):**
+  - two commands added: a destructive tool invoked by name against all data or production, and blanked security
+    configuration;
+  - HO-TA-05 (credential entry into a form) is deliberately not a text rule; it is a context gap;
+  - on v1, now development data, tool abuse went from 6/10 to 9/10 with no other change; tuning and legacy unchanged;
+  - `ToolAbuseRuleTests` has 26 cases, and two hostile prefixes were added.
+- **Redactor timeout:**
+  - reproduced: 86 of 2,151,960 ordinary-text redactions were masked under 10–20× CPU oversubscription, and an
+    immediate retry always succeeded;
+  - fixed with one full retry from the original value; a second timeout still masks. 0 of 2,113,548 under the same
+    load afterwards;
+  - 7 tests.
+- **Docs:** README coverage and "Not implemented" line corrected (tool-abuse text detection exists), D2 wording with
+  the AI-on figures, firewall-pipeline IO-006 row, ai-analysis disclosure note, principles.
+
+### Verification (actual results, working tree)
+
+| Check | Result |
+|---|---|
+| `dotnet build --no-incremental` | 0 warnings, 0 errors |
+| `dotnet test` | **2,854 passed, 0 failed, 0 skipped** (Unit 837, Security 1,128, Api 585, Integration 304) |
+| `npm run lint` / `npm test` / `npm run build` | clean / 402 passed / built (frontend unchanged) |
+| `npm run test:e2e` | **2,124 checks, 0 failed** (Analyze 836, Overview 479, Agents 379, Attack Lab 430) |
+| `reliability --label final --split all` (deterministic and simulated outage) | only HO-TA-02, 08, 09 changed (v1, development data) |
+
+### Known limitations / open items
+
+- **No active held-out set:** v1 is retired; D2 needs new independent data.
+- **Not measured with AI:** the IO-006 change.
+- **Remaining tool-abuse gaps:** HO-TA-05 needs tool-level policy, and only `knowledge.lookup` is gateway-enforced.
+- **Failure under extreme starvation:** a second redactor timeout still masks the value, or holds it for review with
+  AI on.
+
+## Pre-commit audit (2026-10-09)
+
+Independent review of all uncommitted changes before a reviewed commit. No Gemini call; nothing staged, committed or
+pushed. Findings and status: [SUBMISSION_READINESS.md](../SUBMISSION_READINESS.md), section 13; decisions: the
+"Pre-commit review" section of [ADR 0027](decisions/0027-retiring-held-out-v1.md).
+
+### Delivered
+
+- **IO-006 narrowed** (two Medium findings). The reviewer's 11 benign false positives and 8 missed variants were
+  confirmed by failing tests first, then fixed. `ToolAbuseRuleTests` now has 50 cases, including 3 labelled known
+  misses.
+  - Development-data result unchanged: v1 tool abuse 9/10.
+  - Tuning and legacy unchanged.
+- **Evaluation tooling:**
+  - an in-flight send is never re-planned;
+  - retired sets count as development data in near-duplicate checks and are refused for new runs;
+  - the retirement is timestamped;
+  - a recorded baseline is never overwritten;
+  - `report` checks that the store belongs to the dataset.
+- **Tests:** a stall control test.
+- **Docs:**
+  - verbatim evaluation inputs removed;
+  - stale test counts fixed;
+  - ADR 0027 review section.
+- **Verified unchanged:** the frozen held-out v1 evidence and the real-Gemini records are byte-identical. The pin
+  fails on tampering (shown in a scratch copy).
+- **Re-run:** the redactor CPU-load diagnostic, with the same pattern as before.
+
+### Verification (actual results, working tree)
+
+| Check | Result |
+|---|---|
+| `dotnet build --no-incremental` | 0 warnings, 0 errors |
+| `dotnet test` | **2,883 passed, 0 failed, 0 skipped** (Unit 837, Security 1,155, Api 585, Integration 306) |
+| `npm run lint` / `npm test` / `npm run build` | clean / **402 passed** (21 files) / built |
+| `npm run test:e2e` | **2,124 checks, 0 failed** (Analyze 836, Overview 479, Agents 379, Attack Lab 430) |
