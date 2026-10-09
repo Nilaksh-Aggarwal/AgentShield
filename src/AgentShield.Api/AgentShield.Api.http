@@ -1,0 +1,21 @@
+@AgentShield.Api_HostAddress = http://localhost:5102
+
+### Liveness (process up)
+GET {{AgentShield.Api_HostAddress}}/health/live
+Accept: application/json
+
+### Readiness (dependencies)
+GET {{AgentShield.Api_HostAddress}}/health/ready
+Accept: application/json
+
+### Overall health
+GET {{AgentShield.Api_HostAddress}}/health
+Accept: application/json
+X-Correlation-ID: manual-check-001
+
+### Unknown route -> 404 Problem Details with correlationId/errorCode
+GET {{AgentShield.Api_HostAddress}}/api/v1/does-not-exist
+Accept: application/json
+
+### OpenAPI document (Development only)
+GET {{AgentShield.Api_HostAddress}}/swagger/v1/swagger.json

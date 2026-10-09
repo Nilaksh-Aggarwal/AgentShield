@@ -1,0 +1,10 @@
+{
+  "stryker-config": {
+    "project": "AgentShield.Security.csproj",
+    "test-projects": ["../AgentShield.SecurityTests/AgentShield.SecurityTests.csproj"],
+    "mutate": ["**/*.cs", "!**/DependencyInjection.cs"],
+    "coverage-analysis": "perTest",
+    "reporters": ["progress", "cleartext", "json", "html"],
+    "thresholds": { "high": 90, "low": 75, "break": 0 }
+  }
+}

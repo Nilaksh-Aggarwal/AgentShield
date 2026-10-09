@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentShield.Domain\AgentShield.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Scrutor" />
+  </ItemGroup>
+
+  <!-- Use cases stay internal (callers depend on their interfaces); unit tests construct them directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgentShield.UnitTests" />
+  </ItemGroup>
+
+</Project>

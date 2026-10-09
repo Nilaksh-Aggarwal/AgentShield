@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentShield.Application\AgentShield.Application.csproj" />
+  </ItemGroup>
+
+  <!-- Implementations stay internal (they are reached through Application ports); tests construct them directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgentShield.SecurityTests" />
+    <InternalsVisibleTo Include="AgentShield.UnitTests" />
+  </ItemGroup>
+
+</Project>

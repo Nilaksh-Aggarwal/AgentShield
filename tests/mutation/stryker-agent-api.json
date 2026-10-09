@@ -1,0 +1,16 @@
+{
+  "stryker-config": {
+    "project": "AgentShield.Api.csproj",
+    "test-projects": ["../AgentShield.ApiTests/AgentShield.ApiTests.csproj"],
+    "mutate": [
+      "**/Agents/*.cs",
+      "**/Auth/Permissions.cs",
+      "**/Auth/AuthorizationPolicies.cs",
+      "**/Auth/AuthSetup.cs",
+      "**/Auth/ApiClientRegistry.cs"
+    ],
+    "coverage-analysis": "perTest",
+    "reporters": ["progress", "cleartext", "json", "html"],
+    "thresholds": { "high": 90, "low": 75, "break": 0 }
+  }
+}

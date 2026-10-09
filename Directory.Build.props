@@ -1,0 +1,30 @@
+<Project>
+
+  <!--
+    Shared build settings for every project in the repository.
+    See docs/decisions/0002-build-quality-gates.md before relaxing anything here.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+
+    <!-- Analyzers: .NET SDK code-quality rules at the "Recommended" level, enforced at build time. -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!--
+      NuGet vulnerability audit warnings stay visible but do not break the build:
+      a newly published advisory for a transitive package must not block a demo build.
+      They still MUST be triaged — see CLAUDE.md "Package rules".
+    -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+  </PropertyGroup>
+
+</Project>

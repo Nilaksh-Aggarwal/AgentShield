@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Manual AI security evaluation runner (ADR 0017). Evaluation tooling only: nothing in src/ references it and it is
+    never deployed. It hosts the real API in memory (WebApplicationFactory) to measure it; IntegrationTests reference it
+    to test the runner itself without any provider traffic.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/AgentShield.Api/AgentShield.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgentShield.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

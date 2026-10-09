@@ -1,0 +1,87 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,jsonc,yml,yaml,xml,csproj,props,targets,slnx}]
+indent_size = 2
+
+[*.{ts,tsx,js,jsx,mjs,cjs,css,html}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Namespaces / usings
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+
+# Style
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_prefer_braces = true:warning
+dotnet_style_readonly_field = true:warning
+csharp_style_prefer_primary_constructors = true:suggestion
+
+# Enforced at build time (EnforceCodeStyleInBuild)
+dotnet_diagnostic.IDE0161.severity = warning
+dotnet_diagnostic.IDE0011.severity = warning
+dotnet_diagnostic.IDE0044.severity = warning
+dotnet_diagnostic.IDE0065.severity = warning
+dotnet_diagnostic.IDE1006.severity = warning
+
+# Constants and static readonly fields: PascalCase (more specific rule, evaluated first)
+dotnet_naming_rule.constants_pascal.symbols = constant_or_static_readonly_fields
+dotnet_naming_rule.constants_pascal.style = pascal_case
+dotnet_naming_rule.constants_pascal.severity = warning
+dotnet_naming_symbols.constant_or_static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.constant_or_static_readonly_fields.applicable_accessibilities = *
+dotnet_naming_symbols.constant_or_static_readonly_fields.required_modifiers = static, readonly
+dotnet_naming_rule.const_pascal.symbols = const_fields
+dotnet_naming_rule.const_pascal.style = pascal_case
+dotnet_naming_rule.const_pascal.severity = warning
+dotnet_naming_symbols.const_fields.applicable_kinds = field
+dotnet_naming_symbols.const_fields.applicable_accessibilities = *
+dotnet_naming_symbols.const_fields.required_modifiers = const
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+# Private instance fields: _camelCase
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+dotnet_naming_style.underscore_camel.required_prefix = _
+
+# Async: every awaited library call must honour CancellationToken where available.
+dotnet_diagnostic.CA2016.severity = warning
+
+# CA2007 (ConfigureAwait): not applicable to ASP.NET Core — there is no SynchronizationContext.
+dotnet_diagnostic.CA2007.severity = none
+
+# CA1848 (LoggerMessage delegates): structured message templates are mandatory (CA2254 stays on);
+# source-generated LoggerMessage is recommended for hot paths but not enforced on every call site.
+dotnet_diagnostic.CA1848.severity = suggestion
+
+# CA1716 (identifiers vs. keywords of other languages, e.g. VB 'Error'): C#-only codebase with no VB consumers.
+dotnet_diagnostic.CA1716.severity = none
+
+# IDE0005 (unnecessary usings) requires GenerateDocumentationFile to run in build; keep as IDE hint.
+dotnet_diagnostic.IDE0005.severity = suggestion
+
+[tests/**.cs]
+# Test method names use Method_Scenario_Expectation.
+dotnet_diagnostic.CA1707.severity = none
+# xUnit test classes must be public.
+dotnet_diagnostic.CA1515.severity = none
+# Test code creates literal URIs/strings freely.
+dotnet_diagnostic.CA2234.severity = none
+dotnet_diagnostic.CA1054.severity = none
+dotnet_diagnostic.CA1056.severity = none

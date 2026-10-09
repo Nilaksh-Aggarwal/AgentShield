@@ -1,0 +1,47 @@
+# .NET build output
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+TestResults/
+*.trx
+coverage*.xml
+coverage*.json
+
+# IDE
+.vs/
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local secrets / environment overrides — never commit secrets
+# (the API's real secrets live in User Secrets or environment variables, never in a file in this repository)
+appsettings.*.local.json
+*.env.local
+.env
+.env.*
+!.env.example
+secrets.json
+*.pfx
+*.pem
+
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.local
+
+# Mutation testing reports (dotnet stryker, tests/mutation)
+StrykerOutput/

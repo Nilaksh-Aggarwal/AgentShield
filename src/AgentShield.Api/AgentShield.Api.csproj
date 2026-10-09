@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- XML doc comments feed the Swagger document. Public members without docs are allowed (CS1591). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <UserSecretsId>b5ced61a-5b15-478e-a8c6-7e3aa638a50b</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentShield.Application\AgentShield.Application.csproj" />
+    <ProjectReference Include="..\AgentShield.Infrastructure\AgentShield.Infrastructure.csproj" />
+    <ProjectReference Include="..\AgentShield.AI\AgentShield.AI.csproj" />
+    <ProjectReference Include="..\AgentShield.Security\AgentShield.Security.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Development's file sink writes logs/*.json into the project directory, and the Web SDK would pick those files up as
+      Content (every *.json) and copy them into the build and publish output. Log files are runtime data, never build
+      input.
+    -->
+    <Content Remove="logs/**" />
+  </ItemGroup>
+
+</Project>

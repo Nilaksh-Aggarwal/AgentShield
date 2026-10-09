@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/AgentShield.Domain/AgentShield.Domain.csproj" />
+    <ProjectReference Include="../../src/AgentShield.Application/AgentShield.Application.csproj" />
+    <ProjectReference Include="../../src/AgentShield.Security/AgentShield.Security.csproj" />
+    <!-- The in-memory AI capacity gate is pure logic behind an Application port, tested here with a manual clock. -->
+    <ProjectReference Include="../../src/AgentShield.Infrastructure/AgentShield.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

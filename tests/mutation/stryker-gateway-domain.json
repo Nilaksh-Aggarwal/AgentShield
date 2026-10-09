@@ -1,0 +1,16 @@
+{
+  "stryker-config": {
+    "project": "AgentShield.Domain.csproj",
+    "test-projects": ["../AgentShield.UnitTests/AgentShield.UnitTests.csproj"],
+    "mutate": [
+      "**/SecurityEvents/ToolGatewayEvent.cs",
+      "**/Agents/ExecutionGrant.cs",
+      "**/Agents/ToolExecutionOutcome.cs",
+      "**/Agents/Tools/*.cs",
+      "**/Agents/AgentProfile.cs"
+    ],
+    "coverage-analysis": "perTest",
+    "reporters": ["progress", "cleartext", "json", "html"],
+    "thresholds": { "high": 90, "low": 75, "break": 0 }
+  }
+}

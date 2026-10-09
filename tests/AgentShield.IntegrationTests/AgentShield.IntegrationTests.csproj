@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/AgentShield.Api/AgentShield.Api.csproj" />
+    <ProjectReference Include="../AgentShield.Evaluation/AgentShield.Evaluation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- The Milestone 7 evaluation set (test data only; see tests/Evaluation/README.md). -->
+  <ItemGroup>
+    <None Include="../Evaluation/ai-security-evaluation-set.json" Link="Evaluation/ai-security-evaluation-set.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

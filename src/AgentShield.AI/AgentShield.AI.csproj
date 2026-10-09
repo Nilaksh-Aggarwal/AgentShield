@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentShield.Application\AgentShield.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.GenAI" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <!-- Building blocks for provider adapters stay internal; tests exercise them directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgentShield.SecurityTests" />
+    <InternalsVisibleTo Include="AgentShield.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

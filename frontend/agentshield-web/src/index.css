@@ -1,0 +1,67 @@
+@import 'tailwindcss';
+
+/*
+ * Tests and browser checks are not part of the app: class-like words in them (e.g. "transition") would otherwise add
+ * unused utilities to the production stylesheet (T-04).
+ */
+@source not './**/*.test.ts';
+@source not './**/*.test.tsx';
+@source not './test';
+@source not '../e2e';
+
+/*
+ * AgentShield design tokens (Tailwind v4, CSS-first — there is no tailwind.config file).
+ * Every --color-* token becomes a utility: bg-surface, text-muted, border-border, text-danger, bg-danger/10, ...
+ * Keep the set small and semantic; add a token only when a real screen needs it.
+ * Text colours are chosen for WCAG AA contrast on surface/background, including on their own 10% tints.
+ */
+@theme {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e3e6eb;
+  --color-foreground: #16181d;
+  --color-muted: #5b6270;
+  --color-primary: #2f5bea;
+  --color-primary-foreground: #ffffff;
+  --color-success: #15703a;
+  --color-warning: #975a16;
+  --color-danger: #b91c1c;
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  /* The app follows the OS colour scheme (no manual toggle yet): only the token values change. */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background: #0f1115;
+      --color-surface: #171a21;
+      --color-border: #2a2f3a;
+      --color-foreground: #e8eaee;
+      --color-muted: #9aa3b2;
+      --color-primary: #7c9bff;
+      --color-primary-foreground: #0f1115;
+      --color-success: #4ade80;
+      --color-warning: #fbbf24;
+      --color-danger: #f87171;
+    }
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+  }
+
+  /* Inline links in body copy; navigation and branded links override this with utilities. */
+  a {
+    @apply text-primary underline underline-offset-2;
+  }
+
+  /* One consistent, clearly visible keyboard focus ring for every interactive element. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
+  }
+}

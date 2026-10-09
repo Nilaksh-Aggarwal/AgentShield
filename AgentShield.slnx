@@ -1,0 +1,13 @@
+<Solution>
+  <Project Path="src/AgentShield.AI/AgentShield.AI.csproj" />
+  <Project Path="src/AgentShield.Api/AgentShield.Api.csproj" />
+  <Project Path="src/AgentShield.Application/AgentShield.Application.csproj" />
+  <Project Path="src/AgentShield.Domain/AgentShield.Domain.csproj" />
+  <Project Path="src/AgentShield.Infrastructure/AgentShield.Infrastructure.csproj" />
+  <Project Path="src/AgentShield.Security/AgentShield.Security.csproj" />
+  <Project Path="tests/AgentShield.ApiTests/AgentShield.ApiTests.csproj" />
+  <Project Path="tests/AgentShield.Evaluation/AgentShield.Evaluation.csproj" />
+  <Project Path="tests/AgentShield.IntegrationTests/AgentShield.IntegrationTests.csproj" />
+  <Project Path="tests/AgentShield.SecurityTests/AgentShield.SecurityTests.csproj" />
+  <Project Path="tests/AgentShield.UnitTests/AgentShield.UnitTests.csproj" />
+</Solution>
