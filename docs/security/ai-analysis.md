@@ -417,7 +417,7 @@ Section `Ai`, bound to `AiOptions` (AI project) with the nested `GeminiOptions`:
 
 ```json
 "Ai": {
-  "Enabled": false,
+  "Enabled": true,
   "Provider": "Gemini",
   "Model": "gemini-3.8-flash",
   "TimeoutSeconds": 3,

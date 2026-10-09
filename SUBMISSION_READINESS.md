@@ -1,7 +1,7 @@
 # AgentShield — Submission Readiness
 
 Audit against **ET AI Hackathon: Agentic Edition — Detailed Problem Statements** (Problem 2, pages 6–8; framework and
-final-submission expectations, pages 2–4), updated **2026-10-09 (pre-commit audit, section 13)**. This session's environment:
+final-submission expectations, pages 2–4), updated **2026-10-09 (final submission check on `62d1ec3`)**. This session's environment:
 Windows 10 Enterprise 10.0.19045, .NET SDK 10.0.300, Node 24.14.1, npm 9.6.4.
 
 Statuses: **PASS** verified · **PARTIAL** important cases missing · **FAIL** not implemented or fails · **NOT VERIFIED**
@@ -34,15 +34,14 @@ insufficient evidence · **NOT APPLICABLE**.
 
 ## 1. Repository state
 
-- **Git:** `main` tracks `origin/main` (`https://github.com/Nilaksh-Aggarwal/AgentShield.git`).
-  - The head `7a8e335 enhancments` (on top of `039fbc5`) contains the first 2026-10-09 session's work. `origin/main`
-    is still `7a8e335`.
-  - All later work is **uncommitted** in the working tree: the HTTP 500 fix, the evaluation tooling, the real-Gemini
-    results, the tool-abuse rule, the redactor retry and the documents.
-  - Nothing has been committed or pushed.
-- **PASS — the published commit passes its tests.** On the clean `7a8e335` at the start of this session: build 0
-  warnings, **2,786 passed, 0 failed**. The earlier finding that `039fbc5` fails one ApiTests test is resolved by
-  `7a8e335`.
+- **Git:** `main` = `origin/main` = `62d1ec3` ("fix: improve AgentShield detection reliability"; checked against
+  GitHub with `git ls-remote`). The repository is `https://github.com/Nilaksh-Aggarwal/AgentShield`.
+  - The commit contains exactly the 51 files reviewed in section 13: the HTTP 500 fix, the evaluation tooling, the
+    real-Gemini results and frozen evidence, the tool-abuse rule, the redactor retry and the documents.
+  - History: `039fbc5` → `7a8e335` → `62d1ec3`. Only documentation corrections from the final submission check
+    (section 11) are uncommitted.
+- **PASS — the published commit passes its tests.** On `62d1ec3`: `dotnet build --no-incremental` 0 warnings,
+  **2,883 passed, 0 failed, 0 skipped**, the same as section 10.
 
 ## 2. Official Problem 2 requirements (pages 6–8)
 
@@ -426,16 +425,17 @@ No security check was removed or weakened.
 | Deliverable | Status |
 |---|---|
 | Working prototype | **PASS** (section 10) |
-| Public GitHub repository | **PASS** for `origin/main` = `7a8e335`, which passes its tests. **Everything since is uncommitted** (section 1) |
-| Pitch deck | **NOT VERIFIED**: in Canva; the export has not been checked. Its claims should match sections 4–9 |
-| Demo video (2–4 min) | **NOT VERIFIED** |
+| Public GitHub repository | **PASS**: `origin/main` = `62d1ec3`, which passes its tests (section 1) |
+| Pitch deck | **NOT VERIFIED**: in Canva, and no export is in the repository or available to this review. Its claims should match sections 4–9 |
+| Demo video (2–4 min) | **NOT VERIFIED**: no video is in the repository or available to this review |
 | README, setup, API docs, architecture, environment | **PASS** |
 | License | **PASS**: MIT, Copyright (c) 2026 Nilaksh Aggarwal |
-| Git-history secret scan | Not repeated this session; no secret was added (the new test builds its fake key at run time) |
+| Git-history secret scan | **PASS** (all 3 commits, 2026-10-09). Every key-shaped value is in `tests/` or the synthetic evaluation set, and each is a labelled fake: `sk-live-…should-never-appear`, alphabet-sequence keys, AWS's documented example key, and the jwt.io sample token. None is in `src/`, appsettings or docs |
 
 ## 12. Remaining risks and next actions
 
-1. **Review this session's changes**, then commit and push only with your separate approvals.
+1. **Submission deliverables** (manual): the pitch deck export, the 2–4 minute demo video and the Unstop form. Their
+   claims must match sections 4–9.
 2. **AI-on false positives come from provider failures** (3 of 4). With the free tier's latency up to 2.8 s against a
    3 s timeout, a benign input is occasionally held for review.
    - Options are a decision for you, not taken here: a paid tier, a different model or region, or the default
@@ -469,7 +469,7 @@ No security check was removed or weakened.
 
 ## 13. Pre-commit audit (2026-10-09)
 
-An independent review covered the uncommitted changes:
+An independent review covered the changes later committed as `62d1ec3`:
 - a separate, read-only reviewer agent;
 - the reviewer's findings, confirmed by failing tests before they were fixed;
 - this session's own evidence, security and documentation checks.
