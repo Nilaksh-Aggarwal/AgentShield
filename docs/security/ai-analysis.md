@@ -6,9 +6,11 @@ when no provider is configured or the provider fails. Decision record: [ADR 0012
 
 **Status:** the boundary, contracts, validation, timeout, failure handling and finding integration (Milestone 3) plus the
 first real provider, **Google Gemini** (Milestone 4, [section 15](#15-gemini-provider), [ADR 0013](../decisions/0013-gemini-provider.md)).
-AI analysis is **off by default** (`Ai:Enabled = false` in `appsettings.json` and `appsettings.Development.json`; turn
-it on explicitly, see section 15). When off, no provider is registered, no key is needed, nothing
-leaves the process and every decision is exactly the Milestone 2 decision. When enabled, Gemini findings join the
+AI analysis is **on by default since 2026-10-09** (`Ai:Enabled = true` in `appsettings.json` and
+`appsettings.Development.json`, [ADR 0024](../decisions/0024-ai-analysis-on-by-default.md)). The key is never committed: without
+`Ai:Gemini:ApiKey` (User Secrets or `Ai__Gemini__ApiKey`) the API refuses to start; to run without AI, switch it off
+explicitly (`Ai__Enabled=false`, or the `http-deterministic` launch profile). When off, no provider is registered, no key
+is needed, nothing leaves the process and every decision is the deterministic one. When enabled, Gemini findings join the
 deterministic ones through the unchanged aggregator, risk engine and policy engine. No retry, cache or circuit breaker.
 
 **Milestone 6, step 1 ([section 16](#16-ai-capacity-milestone-6-step-1), [ADR 0015](../decisions/0015-ai-capacity-gate.md)):**
@@ -425,14 +427,15 @@ Section `Ai`, bound to `AiOptions` (AI project) with the nested `GeminiOptions`:
 
 | Key | Default | Rule |
 |---|---|---|
-| `Ai:Enabled` | `false` (both appsettings files) | Off: no provider registered, no key needed, no outbound call (Milestone 2 behaviour) |
+| `Ai:Enabled` | `true` (both appsettings files, since 2026-10-09, ADR 0024) | On: a key is required at startup. `false` (e.g. `Ai__Enabled=false`, the `http-deterministic` launch profile, every test factory): no provider registered, no key needed, no outbound call |
 | `Ai:Provider` | `Gemini` | The only accepted value |
 | `Ai:Model` | `gemini-3.8-flash` | Lower-case letters, digits, `.`, `-`; at most 100 characters (it becomes part of the URL) |
 | `Ai:TimeoutSeconds` | `3` | 1–3: the provider's own timeout (typed `HttpClient.Timeout`); the stage's 3 s bound always applies |
 | `Ai:Gemini:ApiKey` | `""` (placeholder) | The secret. User Secrets in Development, `Ai__Gemini__ApiKey` elsewhere. Required when enabled with Gemini |
 
 All values are validated at startup (`ValidateOnStart`); an invalid value, or `Enabled = true` with provider Gemini and
-no key, stops the host. With the default `Enabled = false` the app starts without a key in every environment.
+no key, stops the host. With the default `Enabled = true` the app therefore needs a key in every environment, or AI
+switched off explicitly (until 2026-10-09 the default was `false` and the app started without a key).
 `gemini-3.8-flash` was checked on
 2026-09-29 against Google's model list (stable) and pricing page (free tier for input and output). Changing the model is
 a configuration change only; the identifier appears nowhere else in code.
@@ -651,7 +654,8 @@ fused deterministic findings ─► IRiskEngine + IPolicyEngine (the real ones) 
 
 Every analysis client (a configured client holding `firewall:analyze`, from `IApiClientDirectory`) gets the
 `DefaultClient` budget; per-client configuration does not exist yet. The same values are in `appsettings.json` and
-`appsettings.Development.json`; `Ai:Enabled` stays `false` in both.
+`appsettings.Development.json`; `Ai:Enabled` is `true` in both since 2026-10-09 (ADR 0024). With AI on by default, a
+client sending more than 4 analyses a minute that reach the AI stage gets the excess held for review (`CapacityExceeded`).
 
 **Validation (at startup, only when `Ai:Enabled` is true).** No value has a default, so a missing value fails startup
 instead of being invented. Rules: every global limit > 0; `SkipWhenDeterministicBlock` set; `DefaultClient` present;

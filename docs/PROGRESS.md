@@ -2318,3 +2318,88 @@ normaliser, prompt, capacity, circuit-breaker, timeout, model or User Secret cha
 - Known limitations: synthetic, unreviewed labels; one model (the default `gemini-3.8-flash` not evaluated); the 3 s
   timeout cost 6 analyses (mostly cold first calls); deterministic recall without AI stays 0.38 and AI is off by default.
   **Freeze:** unchanged; no security defect found.
+
+## Problem 2 compliance audit and submission preparation (2026-10-09)
+
+Audit of the project against the official *Detailed Problem Statements* (Problem 2, pages 6–8) in the only available
+copy (extracted from a ZIP; no Git history). Full report: [SUBMISSION_READINESS.md](../SUBMISSION_READINESS.md).
+
+### Delivered
+
+- **Coverage measured, not assumed:**
+  - 33 input probes and 6 tool-layer probes against an isolated Development API (AI off).
+  - Attack types 1, 2, 3, 8 and 9 (as submitted text) are detected; 4 (enforced at the tool layer only), 5 and 6 are
+    partial; 7 (multi-step) is not handled.
+  - Text, Markdown, HTML, email, JSON, code and OCR text are analysed as submitted; there is no PDF, Word, OCR or URL
+    ingestion.
+  - Self-assessed position **D1 × F2**.
+- **Evidence tests:** `RetrievedContentEndpointTests` (16 HTTP tests: injections in six content types blocked, their
+  benign versions allowed, forged turn → Critical Block, system header → Review, credential request → `CredentialDisclosure`).
+- **Attack Lab:** I-10 (instruction in a web page's HTML comment) and I-11 (forged system message in a document), with
+  their limitations stated. API scenario test, Vitest and browser checks were updated. No detector, rule, threshold,
+  policy or contract changed.
+- **Docs:**
+  - README: official Problem 2 wording; Problem 2 coverage section; pipeline order corrected (fusion, then the optional
+    AI, then fusion again).
+  - `attack-lab.md`: 16 scenarios.
+  - MIT `LICENSE`; `docs/API.md`; `SUBMISSION_READINESS.md`; root `.gitignore` additions.
+
+### Verification (actual results, clean copy of the 648-file commit set)
+
+| Check | Result |
+|---|---|
+| `dotnet build` | 0 warnings, 0 errors |
+| `dotnet test` | **2,766 passed, 0 failed, 0 skipped** (Unit 837, Security 1,082, Api 583, Integration 264) |
+| `npm ci` / `npm run lint` / `npm test` / `npm run build` / `npm audit` | 0 vulnerabilities / clean / **388 passed** / built / 0 vulnerabilities |
+| `npm run test:e2e` | **2,122 checks, 0 failed** (Analyze 836, Overview 479, Agents 379, Attack Lab 428) |
+
+### Known limitations / open items
+
+- An intermediate full run had one HTTP 500 on an analyze test under parallel load. It did not reproduce. The likely
+  cause is a regex timeout that fails closed; this is not confirmed.
+- Multi-step jailbreaks, tool-abuse text detection, credential exfiltration wording, plain-prose context poisoning and
+  document/image ingestion remain open (roadmap in the readiness report).
+
+## D2 × F2 reliability work, Gemini on by default, workflow rules (2026-10-09)
+
+Evaluation-led detection work for Problem 2, plus the owner's permanent workflow and AI-default rules. Report:
+[SUBMISSION_READINESS.md](../SUBMISSION_READINESS.md). Nothing was committed or pushed.
+
+### Delivered
+
+- **Reliability sets** (`tests/Evaluation/reliability`, [ADR 0025](decisions/0025-reliability-rules-and-held-out-evaluation.md)):
+  - held-out (138) written and fingerprinted before any rule change;
+  - tuning (95) the only development data;
+  - runner commands `reliability`, `reliability-stress`, `reliability-report`, none of which can call Google;
+  - stored baseline and final results;
+  - `ReliabilitySetTests`: pinned held-out, well-formed and disjoint splits, stored results must match the rules,
+    repeatability, simulated outage never allows.
+- **14 rules in the existing categories:** IO-004..IO-010, RM-004..RM-007, SE-003..SE-005. No new category; contract
+  unchanged; overlaps with existing rules removed.
+- **Gemini on by default** ([ADR 0024](decisions/0024-ai-analysis-on-by-default.md)): `Ai:Enabled = true` in both
+  appsettings files; without a key the API refuses to start; the `http-deterministic` launch profile switches AI off
+  explicitly.
+- **Attack Lab:** I-09 is now detected (Block); I-12 (an instruction in Spanish) is the labelled known miss.
+- **Tests:** `ConcurrentAnalysisTests`; 8 hostile maximum-length inputs; 14 frontend finding explanations.
+- **`CLAUDE.md` section 0:** never commit or push without approval; Gemini on by default; keep the file current.
+
+### Verification (actual results, copy of the working tree)
+
+| Check | Result |
+|---|---|
+| `dotnet build` | 0 warnings, 0 errors |
+| `dotnet test` | **2,786 passed, 0 failed, 0 skipped** (Unit 837, Security 1,090, Api 585, Integration 274) |
+| `npm ci` / lint / `npm test` / build / audit | 0 vulnerabilities / clean / **402 passed** / built / 0 vulnerabilities |
+| `npm run test:e2e` | **2,124 checks, 0 failed** |
+| Held-out, AI off | recall 0.256 → **0.705** (55/78), precision 0.952 → 0.982, false positives 1/60 → 1/60 |
+| Legacy, AI off | recall 0.385 → 0.415 (27/65), false positives 4/48 → 4/48 |
+| Load | 2 × 2,796 concurrent analyses: 0 non-200, 0 exceptions, 0 changed decisions |
+
+### Known limitations / open items
+
+- **D2 not demonstrated:** held-out recall 0.705 is below the 0.90 target, independent recall is 0.415, and no live Gemini
+  evaluation was authorized.
+- **Optimistic held-out figure:** the held-out set and the rules share an author.
+- **Not handled:** multi-step jailbreaks, non-English and paraphrased attacks without AI, and document or image ingestion.
+- **Unexplained 500:** the 500 seen earlier on 2026-10-09 was not reproduced; its cause is unknown.
+- **Published commit failing:** `039fbc5` on GitHub fails one ApiTests test (count 15 vs 17); the working tree fixes it.

@@ -132,7 +132,7 @@ public class AiResponseValidatorTests
             .Concat(obfuscationCodes)
             .Distinct()
             .ToArray();
-        Assert.Equal(11, detectorCodes.Length);
+        Assert.Equal(25, detectorCodes.Length);
 
         Assert.All(detectorCodes, pair =>
             AssertViolation(Output(Candidate(category: pair.Category.ToString(), code: pair.Code)), "code.unknown"));

@@ -8,6 +8,48 @@ Stack: .NET 10 / ASP.NET Core 10 (C#), PostgreSQL + EF Core, React 19 + TypeScri
 
 ---
 
+## 0. Workflow rules (mandatory in every session, set by the project owner on 2026-10-09)
+
+**Rule 1: never commit or push without explicit approval.**
+- Never run `git commit`, `git push`, `git reset`, `git rebase`, `git cherry-pick` or any history-rewriting command
+  without the owner's explicit approval **for that specific operation**.
+- Never amend or delete existing commits unless explicitly authorized.
+- Never run `git init` or create another GitHub repository unless explicitly requested.
+- Being asked to implement, fix, test, review, save or finish something is **not** approval to commit or push.
+- Inspecting Git status, branches, remotes, diffs and history is always allowed.
+- Before asking for commit approval, report the exact changed files, the staged diff, the test results and any security
+  concerns.
+- Commit approval and push approval are separate.
+- Before pushing, show the destination remote, the branch and the files or commits being published, then wait for
+  explicit approval.
+- Never discard, reset or overwrite the owner's uncommitted work. If a destructive action seems necessary, explain why
+  and wait.
+
+**Rule 2: Gemini AI-assisted analysis is on by default** ([ADR 0024](docs/decisions/0024-ai-analysis-on-by-default.md)).
+- `Ai:Enabled` is `true` in `appsettings.json` and `appsettings.Development.json`; Gemini stays the provider; use only the
+  existing model configuration (`Ai:Model`) and never invent model names or API settings.
+- The key stays outside source control: User Secrets locally, `Ai__Gemini__ApiKey` or a secret store when deployed.
+  Never put a real key in `appsettings*.json`, `launchSettings.json`, source, tests, documentation or Git history.
+- **Missing key:** the API refuses to start with a clear message. Running without AI is explicit only: `Ai__Enabled=false`
+  or the `http-deterministic` launch profile. Never silently disable AI to make a demo or test pass; when AI is off or
+  unavailable, say so and keep deterministic-only results apart from AI-enabled ones.
+- Gemini supplies findings only. The deterministic risk and policy engines remain the final authority for Allow / Review /
+  Block; AI never authorizes a tool action; fail-closed handling of inconclusive analysis and failures is preserved.
+- Normal tests use fakes or scripted analyzers and never need a live key. Real-provider runs are opt-in and explicitly
+  identified. Report for every AI-assisted evaluation whether Gemini was really called, with which model, and whether
+  a fake analyzer stood in.
+- Never change production or deployed secrets as part of a task; document environment-specific overrides instead.
+
+**Rule 3: keep this file current.**
+- These workflow and AI rules are project-wide requirements for every future session.
+- When an existing configuration or instruction conflicts with them, name the conflict and propose the smallest safe
+  correction.
+- Show the owner the exact diff of any change to this file, and never commit or push it without approval.
+- This file is guidance, not an enforced boundary. Deterministic safeguards (Claude Code permissions or hooks) are proposed
+  separately for the owner's approval.
+
+---
+
 ## 1. Architecture rules
 
 Modular monolith, Clean Architecture, dependency inversion. Projects (do not rename, merge or add projects without an ADR):
@@ -52,6 +94,10 @@ Hard dependency rules:
     belongs only in the obfuscation detector's views. Invalid UTF-16 and U+FFFE (rejected by `string.Normalize`, D-18)
     become U+FFFD; nothing else is replaced.
   - Detector identities, rule IDs and transformation chains are audit data: logged, never returned by the API.
+  - Reliability sets (`tests/Evaluation/reliability`, ADR 0025): develop rules only against the tuning split; the
+    held-out split is pinned and never edited or tuned against, and labels never change to fit results. After a rule
+    change, re-run `reliability --label final --split all` and store the results (`ReliabilitySetTests` fails on stale
+    results), and report deterministic and AI-assisted results separately.
 - AI-assisted analysis rules (spec: `docs/security/ai-analysis.md`, ADR 0012):
   - Provider adapters implement `IAiSecurityAnalyzer` in `AgentShield.AI` and return the **raw** answer
     (`AiAnalysisOutput`, via `AiStructuredOutputParser`) or an `AiAnalysisErrors` failure. They never build
@@ -66,8 +112,9 @@ Hard dependency rules:
     availability failures included (ADR 0016; nothing falls back to deterministic-only); exceptions → 500. Change
     `AiFailurePolicy` only with its rationale.
   - Content leaves the process only through `IAiDisclosurePolicy` (normalised, secrets masked, never truncated).
-  - AI is enabled by registering a provider, which `AddAI` does only when `Ai:Enabled` is true (`false` in
-    both appsettings files; enable explicitly); the test double stays in the test projects. No AI result caching.
+  - AI is enabled by registering a provider, which `AddAI` does only when `Ai:Enabled` is true (`true` in both
+    appsettings files since ADR 0024; without a key the API refuses to start; run without AI only explicitly with
+    `Ai__Enabled=false` or the `http-deterministic` profile); the test double stays in the test projects. No AI result caching.
   - Gemini (ADR 0013, `ai-analysis.md` section 15): official `Google.GenAI` SDK through the typed `HttpClient`. Keep its
     hardening: pinned endpoint, `Attempts = 1`, typed-client timeout (1–3 s, never above the stage's 3 s), 256 KiB
     response cap, non-thought text only, provider exception messages never used or logged (an unmapped exception leaves the

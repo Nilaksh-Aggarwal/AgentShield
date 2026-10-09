@@ -1,6 +1,7 @@
 using System.Globalization;
 using AgentShield.Evaluation.Dataset;
 using AgentShield.Evaluation.Hosting;
+using AgentShield.Evaluation.Reliability;
 using AgentShield.Evaluation.Report;
 using AgentShield.Evaluation.Results;
 using AgentShield.Evaluation.Run;
@@ -17,6 +18,9 @@ namespace AgentShield.Evaluation;
 /// dotnet run --project tests/AgentShield.Evaluation -- baseline [--results DIR]
 /// dotnet run --project tests/AgentShield.Evaluation -- report   [--results DIR]
 /// dotnet run --project tests/AgentShield.Evaluation -- scan FILE...
+/// dotnet run --project tests/AgentShield.Evaluation -- reliability --label baseline|final [--split heldout|tuning|legacy-v1|all] [--mode deterministic|ai-unavailable]
+/// dotnet run --project tests/AgentShield.Evaluation -- reliability-stress [--hosts N] [--concurrency N] [--rounds N] [--burn N]
+/// dotnet run --project tests/AgentShield.Evaluation -- reliability-report
 /// </code>
 /// Options: <c>--max-calls N</c> (hard cap), <c>--spacing-seconds S</c> (default 20, at least 15 for real runs),
 /// <c>--provider-rpm N</c> and <c>--provider-rpd-remaining N</c> (as AI Studio shows them today; required for real
@@ -27,6 +31,12 @@ internal static class EvaluationProgram
 {
     public static async Task<int> Main(string[] args)
     {
+        // The reliability commands never call a provider; they have their own small parser (ReliabilityCommand).
+        if (args.Length > 0 && args[0].StartsWith("reliability", StringComparison.Ordinal))
+        {
+            return await ReliabilityCommand.RunAsync(args);
+        }
+
         var options = CommandLine.Parse(args, Paths.DefaultResults);
         if (options.Problems.Count > 0)
         {

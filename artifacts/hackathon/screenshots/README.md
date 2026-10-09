@@ -1,7 +1,9 @@
 # AgentShield hackathon screenshots
 
 Screenshots of the real, running AgentShield application (ET AI Hackathon: Agentic Edition), captured on 2026-10-08.
-The Attack Lab scenarios I-10 and I-11 were added on 2026-10-09 and do not appear in these images.
+Changes after the capture (2026-10-09): Attack Lab scenarios I-10 to I-12 were added and do not appear here; I-09
+("Role takeover in plain words"), listed in `04-attack-lab.png` as the known miss, is now detected (Block) by the reliability rules, and
+I-12 is the known miss; Gemini AI-assisted analysis is now on by default (these images were captured with AI off).
 Every decision, risk score, finding and tool outcome shown is the live API's own answer. Nothing was mocked, edited or
 composited. Each image is one crop of the rendered page, and none was retouched.
 
@@ -31,7 +33,7 @@ composited. Each image is one crop of the rendered page, and none was retouched.
   *"Example data, not production telemetry"* notice says. The decisions are real. The *Send an email outside the
   organisation → Review* row is an authorization decision only: no email tool runs behind the gateway.
 - **The Attack Lab scenarios are synthetic** and written for the deterministic rules. They demonstrate implemented
-  controls and are not a benchmark. I-09 is a labelled known miss.
+  controls and are not a benchmark. At capture time I-09 was the labelled known miss; since 2026-10-09 it is detected and I-12 is the known miss.
 - **Activity and the Overview counts** cover this API process's in-memory history only (cleared on restart). They are not
   an audit record, and no accuracy or detection rate is claimed.
 

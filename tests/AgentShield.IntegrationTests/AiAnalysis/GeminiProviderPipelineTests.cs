@@ -119,9 +119,11 @@ public class GeminiProviderPipelineTests(AgentShieldFactory factory) : IClassFix
         Assert.DoesNotContain(ApiKey, exception.ToString(), StringComparison.Ordinal);
     }
 
+    // AI-assisted analysis is on by default (ADR 0024); the key is never committed, so without one the API refuses to start
+    // (InvalidAiConfiguration_FailsAtStartup, "Gemini API key is missing") unless AI is switched off explicitly.
     [Theory]
-    [InlineData("appsettings.json", false)]
-    [InlineData("appsettings.Development.json", false)]
+    [InlineData("appsettings.json", true)]
+    [InlineData("appsettings.Development.json", true)]
     public void CommittedAppsettings_HoldOnlyAnEmptyKeyPlaceholder(string file, bool enabled)
     {
         var contentRoot = factory.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
@@ -131,6 +133,22 @@ public class GeminiProviderPipelineTests(AgentShieldFactory factory) : IClassFix
         Assert.Equal(string.Empty, ai.GetProperty("Gemini").GetProperty("ApiKey").GetString());
         Assert.Equal(enabled, ai.GetProperty("Enabled").GetBoolean());
         Assert.Equal(("Gemini", "gemini-3.8-flash", 3), (ai.GetProperty("Provider").GetString(), ai.GetProperty("Model").GetString(), ai.GetProperty("TimeoutSeconds").GetInt32()));
+    }
+
+    [Fact]
+    public void LaunchProfiles_KeepTheAiDefault_ExceptTheNamedDeterministicProfile()
+    {
+        var contentRoot = factory.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(contentRoot, "Properties", "launchSettings.json")));
+        var profiles = document.RootElement.GetProperty("profiles");
+
+        string? AiOverride(string profile) =>
+            profiles.GetProperty(profile).GetProperty("environmentVariables").TryGetProperty("Ai__Enabled", out var value) ? value.GetString() : null;
+
+        // Running without AI is a visible, deliberate choice: only the profile that says so in its name turns it off.
+        Assert.Equal((null, null, "false"), (AiOverride("http"), AiOverride("https"), AiOverride("http-deterministic")));
+        Assert.All(["http", "https", "http-deterministic"], profile =>
+            Assert.False(profiles.GetProperty(profile).GetProperty("environmentVariables").TryGetProperty("Ai__Gemini__ApiKey", out _)));
     }
 
     [Fact]

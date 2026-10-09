@@ -95,6 +95,76 @@ const catalogue: Readonly<Record<string, CatalogueEntry>> = {
     description: 'The input asks the AI to reveal passwords, API keys or other secrets.',
     source: 'rules',
   },
+  'InstructionOverride.RevokedInstructions': {
+    title: 'Instructions declared void',
+    description: 'The input claims the AI’s instructions have been revoked or no longer apply.',
+    source: 'rules',
+  },
+  'InstructionOverride.AbandonInstructions': {
+    title: 'Request to abandon instructions',
+    description: 'The input tells the AI to stop following or set aside its own instructions.',
+    source: 'rules',
+  },
+  'InstructionOverride.ToolMisuse': {
+    title: 'Destructive tool action requested',
+    description: 'The input instructs a mass deletion or another destructive change through the agent’s tools.',
+    source: 'rules',
+  },
+  'InstructionOverride.CovertAction': {
+    title: 'Hidden action requested',
+    description: 'The input instructs an action to be kept from the user or from the audit log.',
+    source: 'rules',
+  },
+  'InstructionOverride.ApprovalBypass': {
+    title: 'Approval bypass requested',
+    description: 'The input instructs a payment or similar action without the approval it requires.',
+    source: 'rules',
+  },
+  'InstructionOverride.BulkDataTransfer': {
+    title: 'Bulk data transfer requested',
+    description: 'The input instructs sending a whole set of personal or business data to an outside address.',
+    source: 'rules',
+  },
+  'InstructionOverride.PrivilegeEscalation': {
+    title: 'Privilege escalation requested',
+    description: 'The input instructs granting elevated access or an administrative role.',
+    source: 'rules',
+  },
+  'RoleManipulation.PrivilegedRoleClaim': {
+    title: 'Privileged role claimed',
+    description: 'The input assigns the AI a privileged role or claims to be its developer or administrator.',
+    source: 'rules',
+  },
+  'RoleManipulation.SafetyBypass': {
+    title: 'Safety controls switched off',
+    description: 'The input asks the AI to turn off its safety or content controls.',
+    source: 'rules',
+  },
+  'RoleManipulation.ContextPoisoning': {
+    title: 'Content addresses the AI',
+    description: 'The content speaks to the AI directly or poses as an authoritative notice, a common sign of injected instructions.',
+    source: 'rules',
+  },
+  'RoleManipulation.FalsePermission': {
+    title: 'False permission planted',
+    description: 'The input grants the AI a permission or tries to plant a privilege in its memory.',
+    source: 'rules',
+  },
+  'SecretExtraction.ConfigurationDisclosure': {
+    title: 'Attempt to extract configuration',
+    description: 'The input asks the AI to reveal the instructions or configuration it was set up with.',
+    source: 'rules',
+  },
+  'SecretExtraction.CredentialExfiltration': {
+    title: 'Credential exfiltration attempt',
+    description: 'The input asks the AI to send credentials or secrets to an address, a website or its reply.',
+    source: 'rules',
+  },
+  'SecretExtraction.CredentialPhishing': {
+    title: 'Credential phishing attempt',
+    description: 'The input asks the AI to get a person to hand over a password, PIN or card number.',
+    source: 'rules',
+  },
   'Obfuscation.EncodedThreat': {
     title: 'Hidden instruction found after decoding',
     description: 'Part of the input was encoded to hide a manipulation attempt, which was found once it was decoded.',

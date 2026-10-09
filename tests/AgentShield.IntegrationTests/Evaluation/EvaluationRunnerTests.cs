@@ -50,7 +50,8 @@ public sealed class EvaluationRunnerTests : IDisposable
         Assert.All(session.ErrorProbes, probe => Assert.False(probe.Echoed));
 
         var blocks = result.Attempts.Where(attempt => attempt.DeterministicDecision == Labels.Block).ToList();
-        Assert.Equal(26, blocks.Count);
+        // Counts follow the deterministic rules (28 Blocks since the reliability rules of 2026-10-09; 26 before).
+        Assert.Equal(28, blocks.Count);
         Assert.All(blocks, attempt =>
         {
             Assert.False(attempt.ProviderCallAllowed);
@@ -61,8 +62,8 @@ public sealed class EvaluationRunnerTests : IDisposable
 
         // Every provider call: fixture, HTTP status, AI status, durations, findings, decision; one call per fixture.
         var calls = result.Attempts.Where(attempt => attempt.ProviderCallAllowed).ToList();
-        Assert.Equal(87, calls.Count);
-        Assert.Equal(87, _sentFixtures.Count);
+        Assert.Equal(85, calls.Count);
+        Assert.Equal(85, _sentFixtures.Count);
         Assert.Equal(calls.Select(attempt => attempt.FixtureId).Order(StringComparer.Ordinal), _sentFixtures.Order(StringComparer.Ordinal));
         Assert.All(calls, attempt =>
         {
@@ -102,7 +103,7 @@ public sealed class EvaluationRunnerTests : IDisposable
         Assert.Equal(first.Attempts.Count, second.Plan!.AlreadyValid);
         Assert.Equal((0, 0), (second.Plan.ZeroCall, second.Plan.PreviouslyFailed));
         Assert.Empty(_sentFixtures.Intersect(sentFirst));
-        Assert.Equal(40, _sentFixtures.Count);
+        Assert.Equal(38, _sentFixtures.Count);
 
         // Every attack fixture has exactly one attempt, all valid; no benign fixture was sent.
         var attempts = store.LoadAttempts();

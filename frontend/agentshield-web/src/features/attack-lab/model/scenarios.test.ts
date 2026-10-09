@@ -38,9 +38,11 @@ describe('scenarios', () => {
     expect(tools.some((scenario) => !scenario.intent.toolRuns)).toBe(true)
     expect(agentScenarios.some((scenario) => scenario.kind === 'replay')).toBe(true)
 
-    const miss = findScenario('I-09')
+    const miss = findScenario('I-12')
     expect(miss?.category).toBe('Known miss')
-    expect(miss?.limitation).toBeTruthy()
+    expect(miss?.limitation).toContain('English keyword rules')
+    expect(inputScenarios.filter((scenario) => scenario.category === 'Known miss').map((scenario) => scenario.id)).toEqual(['I-12'])
+    expect(findScenario('I-09')).toMatchObject({ category: 'Role manipulation', intent: 'Block' })
     expect(findScenario('T-03')?.limitation).toContain('No tool behind the gateway sends email')
   })
 

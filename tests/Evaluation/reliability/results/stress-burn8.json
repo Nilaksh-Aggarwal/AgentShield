@@ -1,0 +1,16 @@
+{
+  "Hosts": 4,
+  "Concurrency": 16,
+  "Rounds": 3,
+  "BurnThreads": 8,
+  "Requests": 2796,
+  "NonSuccess": 0,
+  "StatusCounts": {
+    "200": 2796
+  },
+  "ServerExceptions": {},
+  "DecisionMismatches": 0,
+  "P50Ms": 40.8,
+  "P95Ms": 86.4,
+  "MaxMs": 249.8
+}

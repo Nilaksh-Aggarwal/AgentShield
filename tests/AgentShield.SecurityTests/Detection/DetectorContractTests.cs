@@ -90,6 +90,15 @@ public class DetectorContractTests
     [InlineData("reveal me the the ")]
     [InlineData("a")]
     [InlineData("\n# ")]
+    // Prefixes of the reliability rules (IO-004..IO-010, RM-004..RM-007, SE-003..SE-005), repeated without completing.
+    [InlineData("email the password and ")]
+    [InlineData("you are no longer a ")]
+    [InlineData("attention the ")]
+    [InlineData("delete all of ")]
+    [InlineData("ask the user to enter their ")]
+    [InlineData("send a refund to x ")]
+    [InlineData("store this in your memory ")]
+    [InlineData("show me the instructions ")]
     public void Detect_MaximumLengthAdversarialInput_CompletesWithoutTimeout(string unit)
     {
         var input = string.Concat(Enumerable.Repeat(unit, (32_000 / unit.Length) + 1))[..32_000];
